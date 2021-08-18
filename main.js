@@ -4,17 +4,11 @@ window.addEventListener('load', () => {
   const canvas = document.querySelector('#draw-area');
   const canvasWidth = 400;
   const canvasHeight = 400;
+  const file = document.getElementById('file');
+  var img = new Image();
   canvas.width = canvasWidth;
   canvas.height = canvasHeight;
-  // contextを使ってcanvasに絵を書いていく
   const context = canvas.getContext('2d');
-
-  // Canvas上に画像を表示
-  var img = new Image();
-  img.src = 'yamatetsu.jpg';
-  img.onload = function() {
-    context.drawImage(img, 0, 0, canvasWidth, canvasHeight);
-  }
   
   // 直前のマウスのcanvas上のx座標とy座標を記録する
   const lastPosition = { x: null, y: null };
@@ -109,7 +103,34 @@ window.addEventListener('load', () => {
       draw(event.layerX, event.layerY);
     });
   }
+
+  function loadLocalImage(e) {
+    // ファイル情報を取得
+    var fileData = e.target.files[0];
+  
+    // 画像ファイル以外は処理を止める
+    if(!fileData.type.match('image.*')) {
+      alert('画像を選択してください');
+      return;
+    }
+  
+    // FileReaderオブジェクトを使ってファイル読み込み
+    var reader = new FileReader();
+    // ファイル読み込みに成功したときの処理
+    reader.onload = function() {
+      img.src = reader.result;
+      img.onload = function() {
+        // canvas内の要素をクリアして、画像を描画
+        context.clearRect(0, 0, canvasWidth, canvasHeight);
+        context.drawImage(img, 0, 0, canvasWidth, canvasHeight);
+      }
+    };
+    // ファイル読み込みを実行
+    reader.readAsDataURL(fileData);
+  }
   
   // イベント処理を初期化する
   initEventHandler();
+  // ファイルが指定された時にloadLocalImage()を実行
+  file.addEventListener('change', loadLocalImage, false);
 });
