@@ -1,6 +1,8 @@
 // ページの読み込みが完了したらコールバック関数が呼ばれる
 // ※コールバック: 第2引数の無名関数(=関数名が省略された関数)
 window.addEventListener('load', () => {
+  const clearButton = document.querySelector('#clear-button');
+  const downloadButton = document.querySelector('#download-button');
   const canvas = document.querySelector('#draw-area');
   const canvasWidth = 400;
   const canvasHeight = 400;
@@ -85,21 +87,19 @@ window.addEventListener('load', () => {
     // 描画中に記録していた値をリセットする
     lastPosition.x = null;
     lastPosition.y = null;
+
+    // canvasにある画像をdownloadURLとして更新
+    var base64 = canvas.toDataURL("image/jpeg");
+    downloadButton.href = base64;
   }
   
   // マウス操作やボタンクリック時のイベント処理を定義する
   function initEventHandler() {
-    const clearButton = document.querySelector('#clear-button');
     clearButton.addEventListener('click', clearExceptImg);
-  
     canvas.addEventListener('mousedown', dragStart);
     canvas.addEventListener('mouseup', dragEnd);
     canvas.addEventListener('mouseout', dragEnd);
     canvas.addEventListener('mousemove', (event) => {
-      // eventの中の値を見たい場合は以下のようにconsole.log(event)で、
-      // デベロッパーツールのコンソールに出力させると良い
-      // console.log(event);
-  
       draw(event.layerX, event.layerY);
     });
   }
