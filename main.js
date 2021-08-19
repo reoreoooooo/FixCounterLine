@@ -6,12 +6,13 @@ window.addEventListener('load', () => {
   const imgForwardButton = document.querySelector('#img-forward-button');
   const imgBackwardButton = document.querySelector('#img-backward-button');
   const relativePathDiplay = document.querySelector('#relative-path');
-  const file = document.getElementById('file');
+  const fileInput = document.getElementById('file');
+  let imgCount = 0;
   
   const canvas = document.querySelector('#draw-area');
   const context = canvas.getContext('2d');
-  const canvasWidth = 400;
-  const canvasHeight = 400;
+  const canvasWidth = 440;
+  const canvasHeight = 300;
   canvas.width = canvasWidth;
   canvas.height = canvasHeight;
 
@@ -75,11 +76,26 @@ window.addEventListener('load', () => {
   }
 
   function imgForward() {
-    console.log("Forward");
+    imgCount++;
+    checkImgbtnEnable(imgCount);
+    imgDisplaing(localDirAndData[imgCount][2][0], localDirAndData[imgCount][2][1]);
   }
 
   function imgBackward() {
-    console.log("Backward");
+    imgCount--;
+    checkImgbtnEnable(imgCount);
+    imgDisplaing(localDirAndData[imgCount][2][0], localDirAndData[imgCount][2][1]);
+  }
+
+  function checkImgbtnEnable(imgCount) {
+    if (imgCount <= 0) {
+      imgBackwardButton.disabled = true;
+    } else if (imgCount >= localDirAndData.length - 1) {
+      imgForwardButton.disabled = true;
+    } else {
+      imgBackwardButton.disabled = false;
+      imgForwardButton.disabled = false;
+    }
   }
 
   function imgDisplaing(fileData, relativePath) {
@@ -173,11 +189,9 @@ window.addEventListener('load', () => {
       localDirAndData.push([crossDirList[i], ribeyeDirList[i], previewDirList[i]]);
     }
 
-    imgDisplaing(localDirAndData[0][0][0], localDirAndData[0][0][1]);
+    imgDisplaing(localDirAndData[0][2][0], localDirAndData[0][2][1]);
   }
   
-  // イベント処理を初期化する
   initEventHandler();
-  // ファイルが指定された時にloadLocalImage()を実行
-  file.addEventListener('change', loadImageDatas, false);
+  fileInput.addEventListener('change', loadImageDatas, false);
 });
