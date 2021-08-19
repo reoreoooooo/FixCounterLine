@@ -3,14 +3,20 @@
 window.addEventListener('load', () => {
   const clearButton = document.querySelector('#clear-button');
   const downloadButton = document.querySelector('#download-button');
+  const imgForwardButton = document.querySelector('#img-forward-button');
+  const imgBackwardButton = document.querySelector('#img-backward-button');
+  const relativePathDiplay = document.querySelector('#relative-path');
+  const file = document.getElementById('file');
+  
   const canvas = document.querySelector('#draw-area');
+  const context = canvas.getContext('2d');
   const canvasWidth = 400;
   const canvasHeight = 400;
-  const file = document.getElementById('file');
-  var img = new Image();
   canvas.width = canvasWidth;
   canvas.height = canvasHeight;
-  const context = canvas.getContext('2d');
+
+  let displayingImg = new Image();
+  let localDirAndData = [];
   
   // 直前のマウスのcanvas上のx座標とy座標を記録する
   const lastPosition = { x: null, y: null };
@@ -65,7 +71,31 @@ window.addEventListener('load', () => {
   // canvas上に書いた絵を全部消す
   function clearExceptImg() {
     context.clearRect(0, 0, canvasWidth, canvasHeight);
-    context.drawImage(img, 0, 0, canvasWidth, canvasHeight);
+    context.drawImage(displayingImg, 0, 0, canvasWidth, canvasHeight);
+  }
+
+  function imgForward() {
+    console.log("Forward");
+  }
+
+  function imgBackward() {
+    console.log("Backward");
+  }
+
+  function imgDisplaing(fileData, relativePath) {
+    // FileReaderオブジェクトを使ってファイル読み込み
+    let reader = new FileReader();
+    // ファイル読み込みに成功したときの処理
+    reader.onload = function() {
+      displayingImg.src = reader.result;
+      displayingImg.onload = function() {
+        // canvas内の要素をクリアして、画像を描画
+        context.clearRect(0, 0, canvasWidth, canvasHeight);
+        context.drawImage(displayingImg, 0, 0, canvasWidth, canvasHeight);
+        relativePathDiplay.textContent = relativePath;  
+      }
+    }
+    reader.readAsDataURL(fileData);
   }
   
   // マウスのドラッグを開始したらisDragのフラグをtrueにしてdraw関数内で
@@ -89,13 +119,15 @@ window.addEventListener('load', () => {
     lastPosition.y = null;
 
     // canvasにある画像をdownloadURLとして更新
-    var base64 = canvas.toDataURL("image/jpeg");
+    let base64 = canvas.toDataURL("image/jpeg");
     downloadButton.href = base64;
   }
   
   // マウス操作やボタンクリック時のイベント処理を定義する
   function initEventHandler() {
     clearButton.addEventListener('click', clearExceptImg);
+    imgForwardButton.addEventListener('click', imgForward);
+    imgBackwardButton.addEventListener('click', imgBackward);
     canvas.addEventListener('mousedown', dragStart);
     canvas.addEventListener('mouseup', dragEnd);
     canvas.addEventListener('mouseout', dragEnd);
@@ -104,33 +136,48 @@ window.addEventListener('load', () => {
     });
   }
 
-  function loadLocalImage(e) {
-    // ファイル情報を取得
-    var fileData = e.target.files[0];
-  
-    // 画像ファイル以外は処理を止める
-    if(!fileData.type.match('image.*')) {
-      alert('画像を選択してください');
+
+  // デフォルトでは名前降順のfileData, relativePathを
+  // [cross, ribeye, preview], []... の名前昇順のリスト構造になるように体裁を整え、一枚目を表示させる。
+  function loadImageDatas(e) {
+    let crossDirList = [];
+    let ribeyeDirList = [];
+    let previewDirList = [];
+    for (let i = 0; i < e.target.files.length; i++) {
+      let fileData = e.target.files[i];
+
+      // 画像ファイル以外は処理をしない
+      if(!fileData.type.match('image.*')) {
+        continue
+      }
+
+      // ディレクトリの相対パス(絶対パスはセキュリティ上取得できない)
+      let relativePath = fileData.webkitRelativePath;
+
+      if (relativePath.indexOf("cross_section") != -1) {
+        crossDirList.push([fileData,relativePath]);
+      } else if (relativePath.indexOf("ribeye_mask") != -1) {
+        ribeyeDirList.push([fileData,relativePath]);
+      } else if (relativePath.indexOf("preview") != -1) {
+        previewDirList.push([fileData,relativePath]);
+      }
+    }
+
+    if (!(crossDirList.length == ribeyeDirList.length && ribeyeDirList.length == previewDirList.length)) {
+      // TODO: どの写真が余っているのか、不足しているのかアラートで知らせる
+      alert('cross_section, ribeye_mask, preview の写真枚数が一致しません');
       return;
     }
-  
-    // FileReaderオブジェクトを使ってファイル読み込み
-    var reader = new FileReader();
-    // ファイル読み込みに成功したときの処理
-    reader.onload = function() {
-      img.src = reader.result;
-      img.onload = function() {
-        // canvas内の要素をクリアして、画像を描画
-        context.clearRect(0, 0, canvasWidth, canvasHeight);
-        context.drawImage(img, 0, 0, canvasWidth, canvasHeight);
-      }
-    };
-    // ファイル読み込みを実行
-    reader.readAsDataURL(fileData);
+
+    for (let i = 0; i < crossDirList.length; i++) {
+      localDirAndData.push([crossDirList[i], ribeyeDirList[i], previewDirList[i]]);
+    }
+
+    imgDisplaing(localDirAndData[0][0][0], localDirAndData[0][0][1]);
   }
   
   // イベント処理を初期化する
   initEventHandler();
   // ファイルが指定された時にloadLocalImage()を実行
-  file.addEventListener('change', loadLocalImage, false);
+  file.addEventListener('change', loadImageDatas, false);
 });

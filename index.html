@@ -8,13 +8,18 @@
 </head>
 <body>
   <h1>お絵かきアプリ</h1>
-  <div class="upload"><input type="file" name="file" id="file"></div>
+  <div class="upload">
+    <input type="file" name="file" id="file" webkitdirectory>
+    <p id="relative-path">未定</p>
+  </div>
   <canvas
     id="draw-area"
     style="border: 1px solid #000000;"></canvas>
   <div>
     <button id="clear-button">全消し</button>
     <a id="download-button" href="#" download="aaaa.jpg">ダウンロード</a>
+    <button id="img-backward-button">＜</button>
+    <button id="img-forward-button">＞</button>
   </div>
   <script src="./main.js"></script>
 </body>
