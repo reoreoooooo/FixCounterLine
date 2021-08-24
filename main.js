@@ -1,4 +1,7 @@
 window.addEventListener('load', () => {
+    // ストレージの呼び出し
+  let myStorage = localStorage;
+
   const clearButton = document.querySelector('#clear-button');
   const downloadButton = document.querySelector('#download-button');
   const imgForwardButton = document.querySelector('#img-forward-button');
@@ -20,11 +23,21 @@ window.addEventListener('load', () => {
   ribeyeCanvas.width = canvasWidth;
   ribeyeCanvas.height = canvasHeight;
 
+  let ribeyeConterCanvas = document.querySelector('#ribeye-contour-area');
+  let ribeyeConterContext = ribeyeConterCanvas.getContext('2d');
+  ribeyeConterCanvas.width = canvasWidth;
+  ribeyeConterCanvas.height = canvasHeight;
+
   let previewImg = new Image();
+  let oriRibeyeImg = new Image();
   let ribeyeImg = new Image();
 
   let ribeyeImageData;　　// [r, g, b, a, r, g, b, a ...]というデータ構造になっている
   let loadedPathAndImgList = [];
+
+  let isStartInsideMask;
+  let isEndInsideMask;
+  let isCrossedMask;
   
   // 始点、終点、現在点のマウスのcanvas上のxy座標
   const startPosition = {x: null, y: null};
@@ -33,18 +46,14 @@ window.addEventListener('load', () => {
   
   // マウスがドラッグされているか判断するためのフラグ
   let isDrag = false;
+  let isLoadedImage = false;
   
   // 絵を書く
-  function draw(x, y) {
-    // ドラッグしながらしか絵を書くことが出来ない。
-    if(!isDrag) {
+  function boundaryChangeDraw(x, y, context) {
+    // ドラッグしながらしか絵を書くことが出来ない。imageを読み込んでいないと書けない
+    if(!isDrag || !isLoadedImage) {
       return;
     }
-  
-    context.lineCap = 'round';  // 丸みを帯びた線にする
-    context.lineJoin = 'round'; // 丸みを帯びた線にする
-    context.lineWidth = 5;      // 線の太さ
-    context.strokeStyle = 'black'; // 線の色
   
     // context.moveToで設定した位置から、context.lineToで設定した位置までの線を引く。
     if (nowPosition.x === null || nowPosition.y === null) {
@@ -59,10 +68,39 @@ window.addEventListener('load', () => {
     nowPosition.x = x;
     nowPosition.y = y;
   }
+
+  function saveToLocalStoreage() {
+    // ローカルストレージから配列を取得
+    let logs = JSON.parse(myStorage.getItem("__log"));
+    // 画像化する
+    let ribeyeDataURL = ribeyeCanvas.toDataURL();
+    // 配列に画像を格納
+    logs.unshift(ribeyeDataURL);
+    // ローカルストレージに配列を保存
+    myStorage.setItem("__log", JSON.stringify(logs));
+ }
+
+  // Canvasを戻す
+  function prevCanvas() {
+    let logs = JSON.parse(myStorage.getItem("__log"));
+    if (logs.length > 0) {
+      myStorage.setItem("__log", JSON.stringify(logs));
+      //画像を描写する
+      ribeyeImg.src = logs.shift();
+      ribeyeImg.onload = function() {
+        //Canvasを初期化する
+        ribeyeContext.clearRect(0, 0, canvasWidth, canvasHeight);
+        ribeyeContext.drawImage(ribeyeImg, 0, 0);
+      }
+    }
+  }
   
   function clearExceptImg() {
     context.clearRect(0, 0, canvasWidth, canvasHeight);
     context.drawImage(previewImg, 0, 0, canvasWidth, canvasHeight);
+    ribeyeContext.clearRect(0, 0, canvasWidth, canvasHeight);
+    ribeyeContext.drawImage(oriRibeyeImg, 0, 0, canvasWidth, canvasHeight);
+    changeBoundary();
   }
 
   function imgForward() {
@@ -110,12 +148,13 @@ window.addEventListener('load', () => {
     let reader = new FileReader();
     // ファイル読み込みに成功したときの処理
     reader.onload = function() {
-      ribeyeImg.src = reader.result;
-      ribeyeImg.onload = function() {
+      oriRibeyeImg.src = reader.result;
+      oriRibeyeImg.onload = function() {
         // canvas内の要素をクリアして、画像を描画。imagedataを取得
         ribeyeContext.clearRect(0, 0, canvasWidth, canvasHeight);
-        ribeyeContext.drawImage(ribeyeImg, 0, 0, canvasWidth, canvasHeight);
+        ribeyeContext.drawImage(oriRibeyeImg, 0, 0, canvasWidth, canvasHeight);
         ribeyeImageData = ribeyeContext.getImageData(0,0,canvasWidth,canvasHeight).data;
+        changeBoundary();
       }
     }
     // index番目のpreview, ribeyeの読み込みを行う
@@ -127,49 +166,86 @@ window.addEventListener('load', () => {
     let g = ribeyeImageData[(x + y * canvasWidth) * 4 + 1];
     let b = ribeyeImageData[(x + y * canvasWidth) * 4 + 2];
 
-    if(r == 255 && g == 255 && b == 255) {
+    if (r == 255 && g == 255 && b == 255) {
       return true;
     } else {
       return false;
     }
   }
 
+  // TODO: コードが汚い。直す
   function changeBoundary() {
-    // TODO: 始点終点の座標がマスクの内部か外部か判定し、切り取り、付け加えを判定
-    // TODO: nowPositionも監視して、マスクに入って出たか、Andで条件付けしないといけない
-    if (isInsideMask(startPosition.x, startPosition.y)) {
-      console.log("start地点がマスク内");
-    } else {
-      console.log("start地点がマスク外");
+    let ori = cv.imread("ribeye-area");
+    let oriGray = new cv.Mat();
+    let contours = new cv.MatVector();
+    let hierarchy = new cv.Mat();
+    let maskResult = cv.Mat.ones(canvasHeight, canvasWidth, cv.CV_8UC3);　// opencvでは(縦, 横)になることに注意
+    let contourResult = cv.Mat.ones(canvasHeight, canvasWidth, cv.CV_8UC3);
+    let point = new cv.Point(0, 0);
+    let whiteColor = new cv.Scalar(255, 255, 255);
+    let greenColor = new cv.Scalar(0, 255, 0);
+    let maxArea = 0;
+    let maxAreaIndex = 0;
+
+    let isAddArea = isInsideMask(startPosition.x, startPosition.y) && isInsideMask(endPosition.x, endPosition.y);
+    let isClipArea =  !isInsideMask(startPosition.x, startPosition.y) && !isInsideMask(endPosition.x, endPosition.y);
+
+    if (!(isAddArea || isClipArea)) {
+      prevCanvas();
+      return;
     }
 
-    if (isInsideMask(endPosition.x, endPosition.y)) {
-      console.log("end地点がマスク内")
-    } else {
-      console.log("end地点がマスク外")
+    cv.cvtColor(ori, oriGray, cv.COLOR_RGBA2GRAY, 0);
+    cv.findContours(oriGray, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE, point);
+    //　一番大きな多角形を取得
+    for (let i = 0; i < contours.size(); i++) {
+      let cnt = contours.get(i);
+      let area = cv.contourArea(cnt, false);
+      if (area > maxArea) {
+        maxArea = area;
+        maxAreaIndex = i;
+      }
     }
+    cv.drawContours(maskResult, contours, maxAreaIndex, whiteColor, cv.FILLED);
+    cv.drawContours(contourResult, contours, maxAreaIndex, greenColor, 2);
 
+    cv.imshow("ribeye-area", maskResult);
+    cv.imshow("ribeye-contour-area", contourResult);
+
+    ribeyeImageData = ribeyeContext.getImageData(0,0,canvasWidth,canvasHeight).data;
+    saveToLocalStoreage();
+
+    ori.delete();
+    oriGray.delete();
+    contours.delete();
+    hierarchy.delete();
+    maskResult.delete();
+    contourResult.delete();
   }
   
   // 「context.beginPath()」と「context.closePath()」を都度draw関数内で実行するよりも、
   // 線の描き始め(dragStart関数)と線の描き終わり(dragEnd)で1回ずつ読んだほうがより綺麗に線画書ける
-  function dragStart(event) {
+  function dragStart(event, context) {
     context.beginPath();
     isDrag = true;
+    isStartInsideMask = isInsideMask(event.layerX, event.layerY);
 
     startPosition.x = event.layerX;
     startPosition.y = event.layerY;
   }
 
-  function dragEnd(event) {
+  function dragEnd(event, context) {
+    if (!isDrag) {
+      return;
+    }
+
     context.closePath();
     isDrag = false;
+    isEndInsideMask = isInsideMask(event.layerX, event.layerY);
 
     endPosition.x = event.layerX;
     endPosition.y = event.layerY;
 
-    // TODO: 始点終点の座標がマスクの内部か外部か判定し、切り取り、付け加えを判定。
-    // マスクと線の交点を求め(何点もある場合は　last -> first)、「輪郭線及びマスクの更新」を行う
     changeBoundary();
   
     // 描画中に記録していた値をリセットする
@@ -181,16 +257,48 @@ window.addEventListener('load', () => {
     downloadButton.href = base64;
   }
 
+  function draw(event, context) {
+    let x = event.layerX;
+    let y = event.layerY;
+    // TODO: マスクの境界を横断したかどうか判定し、線の色等を変更する機構を作る
+    // TODO: 見かけ上は色を変更、実際は黒みたいな感じで線をかけるといい
+    // isCrossedMask = (isStartInsideMask && !isInsideMask(x, y)) || (!isStartInsideMask && isInsideMask(x, y));
+
+    if (isStartInsideMask) {
+      context.lineCap = 'round';  // 丸みを帯びた線にする
+      context.lineJoin = 'round'; // 丸みを帯びた線にする
+      context.lineWidth = 5;      // 線の太さ
+      context.strokeStyle = 'red'; // 線の色
+    } else {
+      context.lineCap = 'round';  // 丸みを帯びた線にする
+      context.lineJoin = 'round'; // 丸みを帯びた線にする
+      context.lineWidth = 5;      // 線の太さ
+      context.strokeStyle = 'black'; // 線の色
+    }
+    boundaryChangeDraw(x, y, context);
+  }
+
+  function addEventListenerToCanvas(canvas, context) {
+    canvas.addEventListener('mousedown', (event) => {
+      dragStart(event, context);
+    });
+    canvas.addEventListener('mouseup', (event) => {
+      dragEnd(event, context);
+    });
+    canvas.addEventListener('mouseout', (event) => {
+      dragEnd(event, context);
+    }); // TODO: 余分に出力されている。直す必要があるかどうか検討
+    canvas.addEventListener('mousemove', (event) => {
+      draw(event, context);
+    });
+  }
+
   function initEventHandler() {
     clearButton.addEventListener('click', clearExceptImg);
     imgForwardButton.addEventListener('click', imgForward);
     imgBackwardButton.addEventListener('click', imgBackward);
-    canvas.addEventListener('mousedown', dragStart);
-    canvas.addEventListener('mouseup', dragEnd);
-    canvas.addEventListener('mouseout', dragEnd); // TODO: 余分に出力されている
-    canvas.addEventListener('mousemove', (event) => {
-      draw(event.layerX, event.layerY);
-    });
+    addEventListenerToCanvas(canvas, context);
+    addEventListenerToCanvas(ribeyeCanvas, ribeyeContext);
   }
 
   function createSortedPathAndImgList(e) {
@@ -243,8 +351,14 @@ window.addEventListener('load', () => {
     setAndGetRibeyeImage(loadedPathAndImgList[0][1]);
     imgBackwardButton.disabled = false;
     imgForwardButton.disabled = false;
+    isLoadedImage = true
+  }
+
+  function initLocalStorage() {
+    myStorage.setItem("__log", JSON.stringify([]));
   }
   
   initEventHandler();
+  initLocalStorage();
   fileInput.addEventListener('change', loadFileDatas, false);
 });
