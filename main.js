@@ -10,8 +10,8 @@ window.addEventListener('load', () => {
   const fileInput = document.getElementById('file');
   let imgCount = 0;
   
-  const canvasWidth = 440;
-  const canvasHeight = 300;
+  const canvasWidth = 1760;
+  const canvasHeight = 1200;
 
   const canvas = document.querySelector('#preview-draw-area');
   const context = canvas.getContext('2d');
@@ -117,7 +117,9 @@ window.addEventListener('load', () => {
     context.drawImage(oriPreviewImg, 0, 0, canvasWidth, canvasHeight);
     ribeyeContext.clearRect(0, 0, canvasWidth, canvasHeight);
     ribeyeContext.drawImage(oriRibeyeImg, 0, 0, canvasWidth, canvasHeight);
-    //changeBoundary();
+    changeBoundary();
+    saveToLocalStoreage();
+    ribeyeImageData = ribeyeContext.getImageData(0,0,canvasWidth,canvasHeight).data;
   }
 
   function imgForward() {
@@ -192,6 +194,7 @@ window.addEventListener('load', () => {
         relativePathDiplay.textContent = dataAndPath[1];  
         oriCrossSectionImg = cv.imread("preview-draw-area");
         changeBoundary()
+        saveToLocalStoreage();
       }
     }
     // index番目のpreview, ribeyeの読み込みを行う
@@ -253,7 +256,8 @@ window.addEventListener('load', () => {
     let ori = cv.Mat.ones(canvasHeight, canvasWidth, cv.CV_8UC3);
     let contourResult = cv.Mat.ones(canvasHeight, canvasWidth, cv.CV_8UC3);
     contourResult = detectContour();
-    ori = oriCrossSectionImg;
+
+    ori = oriCrossSectionImg.clone();
     for (let i = 0; i < canvasHeight; i++) {
       for (let j = 0; j < canvasWidth; j++) {
         if (contourResult.ucharPtr(i, j)[1] == 255) {
@@ -299,8 +303,9 @@ window.addEventListener('load', () => {
     } else {
       changeBoundary();
       saveToLocalStoreage();
+      ribeyeImageData = ribeyeContext.getImageData(0,0,canvasWidth,canvasHeight).data;
     }
-  
+
     // 描画中に記録していた値をリセットする
     nowPosition.x = null;
     nowPosition.y = null;
