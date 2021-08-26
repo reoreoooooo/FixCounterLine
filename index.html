@@ -4,13 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="ie=edge">
-  <title>お絵かきアプリ</title>
+  <title>Preview輪郭線修正</title>
 </head>
 <body>
-  <h1>お絵かきアプリ</h1>
+  <h1>Preview輪郭線修正</h1>
   <div class="upload">
     <input type="file" name="file" id="file" webkitdirectory>
-    <p id="relative-path">未定</p>
+    <p id="relative-path"></p>
   </div>
   <canvas
     id="preview-draw-area"
@@ -29,5 +29,15 @@
   </div>
   <script src="./main.js"></script>
   <script src="https://docs.opencv.org/3.4.1/opencv.js"></script>
+
+  <style>
+    #ribeye-area{
+      display: none;
+    }
+    #ribeye-contour-area{
+      display: none;
+    }
+  </style>
+  
 </body>
 </html>
