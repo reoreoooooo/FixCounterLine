@@ -10,8 +10,8 @@ window.addEventListener('load', () => {
   const fileInput = document.getElementById('file');
   let imgCount = 0;
   
-  const canvasWidth = 1760;
-  const canvasHeight = 1200;
+  const canvasWidth = 2200;
+  const canvasHeight = 1500;
 
   const canvas = document.querySelector('#preview-draw-area');
   const context = canvas.getContext('2d');
@@ -28,13 +28,13 @@ window.addEventListener('load', () => {
   ribeyeConterCanvas.width = canvasWidth;
   ribeyeConterCanvas.height = canvasHeight;
 
-  let oriPreviewImg = new Image();
-  let previewImg = new Image();
+  let oriCrossSectionImg = new Image();
+  let cvOriCrossSectionImg = cv.Mat.ones(canvasHeight, canvasWidth, cv.CV_8UC3);
+  let preCrossSectionImg = cv.Mat.ones(canvasHeight, canvasWidth, cv.CV_8UC3);
   let oriRibeyeImg = new Image();
-  let ribeyeImg = new Image();
-  let oriCrossSectionImg = cv.Mat.ones(canvasHeight, canvasWidth, cv.CV_8UC3);
+  let preRibeyeImg = cv.Mat.ones(canvasHeight, canvasWidth, cv.CV_8UC3);
 
-  let ribeyeImageData;　　// [r, g, b, a, r, g, b, a ...]というデータ構造になっている
+
   let loadedPathAndImgList = [];
 
   let isStartInsideMask = false;
@@ -77,59 +77,39 @@ window.addEventListener('load', () => {
   }
 
   function saveToLocalStoreage() {
-    let logs = JSON.parse(myStorage.getItem("__log"));
-    let oriDataURL = canvas.toDataURL();
-    let ribeyeDataURL = ribeyeCanvas.toDataURL();
-
-    logs[0] = {oriDataURL, ribeyeDataURL};
-    myStorage.setItem("__log", JSON.stringify(logs));
+    preRibeyeImg = cv.imread("ribeye-area");
+    preCrossSectionImg = cv.imread("preview-draw-area");
  }
 
   // Canvasを戻す
   function prevCanvas() {
-    let logs = JSON.parse(myStorage.getItem("__log"));
-    let preimageDatas;
-    if (logs.length > 0) {
-      myStorage.setItem("__log", JSON.stringify(logs));
-      preimageDatas = logs.shift();
-
-      previewImg.src = preimageDatas["oriDataURL"];
-      previewImg.onload = function() {
-        //Canvasを初期化する
-        context.clearRect(0, 0, canvasWidth, canvasHeight);
-        context.drawImage(previewImg, 0, 0);
-      }
-      ribeyeImg.src = preimageDatas["ribeyeDataURL"];
-      ribeyeImg.onload = function() {
-        //Canvasを初期化する
-        ribeyeContext.clearRect(0, 0, canvasWidth, canvasHeight);
-        ribeyeContext.drawImage(ribeyeImg, 0, 0);
-      }
-    }
+    cv.imshow("ribeye-area", preRibeyeImg);
+    cv.imshow("preview-draw-area", preCrossSectionImg);
   }
 
   function clearExceptImg() {
     context.clearRect(0, 0, canvasWidth, canvasHeight);
-    context.drawImage(oriPreviewImg, 0, 0, canvasWidth, canvasHeight);
+    context.drawImage(oriCrossSectionImg, 0, 0, canvasWidth, canvasHeight);
     ribeyeContext.clearRect(0, 0, canvasWidth, canvasHeight);
     ribeyeContext.drawImage(oriRibeyeImg, 0, 0, canvasWidth, canvasHeight);
     changeBoundary();
     saveToLocalStoreage();
-    ribeyeImageData = ribeyeContext.getImageData(0,0,canvasWidth,canvasHeight).data;
   }
 
   function imgForward() {
     imgCount++;
+    imgForwardButton.disabled = true;
+    imgBackwardButton.disabled = true;
     isChangedContour = false;
-    checkImgbtnEnable(imgCount);
     setCrossSectionImage(loadedPathAndImgList[imgCount][0]);
     setAndGetRibeyeImage(loadedPathAndImgList[imgCount][1]);
   }
 
   function imgBackward() {
     imgCount--;
+    imgForwardButton.disabled = true;
+    imgBackwardButton.disabled = true;
     isChangedContour = false;
-    checkImgbtnEnable(imgCount);
     setCrossSectionImage(loadedPathAndImgList[imgCount][0]);
     setAndGetRibeyeImage(loadedPathAndImgList[imgCount][1]);
   }
@@ -154,7 +134,6 @@ window.addEventListener('load', () => {
         // canvas内の要素をクリアして、画像を描画。imagedataを取得
         ribeyeContext.clearRect(0, 0, canvasWidth, canvasHeight);
         ribeyeContext.drawImage(oriRibeyeImg, 0, 0, canvasWidth, canvasHeight);
-        ribeyeImageData = ribeyeContext.getImageData(0,0,canvasWidth,canvasHeight).data;
       }
     }
     // index番目のpreview, ribeyeの読み込みを行う
@@ -162,20 +141,19 @@ window.addEventListener('load', () => {
   }
 
   function setCrossSectionImage(dataAndPath) {
-    let now = Date.now();
     let reader = new FileReader();
-    let crossSectionImg = new Image();
     // ファイル読み込みに成功したときの処理
     reader.onload = function() {
-      crossSectionImg.src = reader.result;
-      crossSectionImg.onload = function() {
+      oriCrossSectionImg.src = reader.result;
+      oriCrossSectionImg.onload = function() {
         // canvas内の要素をクリアして、画像を描画。imagedataを取得
         context.clearRect(0, 0, canvasWidth, canvasHeight);
-        context.drawImage(crossSectionImg, 0, 0, canvasWidth, canvasHeight);
+        context.drawImage(oriCrossSectionImg, 0, 0, canvasWidth, canvasHeight);
         relativePathDiplay.textContent = dataAndPath[1];  
-        oriCrossSectionImg = cv.imread("preview-draw-area");
+        cvOriCrossSectionImg = cv.imread("preview-draw-area");
         changeBoundary()
         saveToLocalStoreage();
+        setTimeout(checkImgbtnEnable, 1000, imgCount);
       }
     }
     // index番目のpreview, ribeyeの読み込みを行う
@@ -183,9 +161,9 @@ window.addEventListener('load', () => {
   }
 
   function isInsideMask(x, y) {
-    let r = ribeyeImageData[(x + y * canvasWidth) * 4];
-    let g = ribeyeImageData[(x + y * canvasWidth) * 4 + 1];
-    let b = ribeyeImageData[(x + y * canvasWidth) * 4 + 2];
+    let r = preRibeyeImg.ucharPtr(y, x)[0];
+    let g = preRibeyeImg.ucharPtr(y, x)[1];
+    let b = preRibeyeImg.ucharPtr(y, x)[2];
 
     if (r == 255 && g == 255 && b == 255) {
       return true;
@@ -202,7 +180,6 @@ window.addEventListener('load', () => {
     let maskResult = cv.Mat.ones(canvasHeight, canvasWidth, cv.CV_8UC3);　// opencvでは(縦, 横)になることに注意
     let maxArea = 0;
     let maxAreaIndex = 0;
-    let now = Date.now();
 
     cv.cvtColor(ribeyeOri, ribeyeOriGray, cv.COLOR_RGBA2GRAY, 0);
     cv.findContours(ribeyeOriGray, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE, new cv.Point(0, 0));
@@ -231,7 +208,7 @@ window.addEventListener('load', () => {
     let ori = cv.Mat.ones(canvasHeight, canvasWidth, cv.CV_8UC4);
     let contourResult = detectContour();
     
-    ori = oriCrossSectionImg.clone();
+    ori = cvOriCrossSectionImg.clone();
     cv.cvtColor(ori, ori, cv.COLOR_RGBA2RGB); //8UC4 -> 8UC3への変更。imreadすると8UC4に勝手に変換されてしまう。
     cv.drawContours(ori, contourResult[0], contourResult[1], new cv.Scalar(0, 255, 0), 3);
 
@@ -271,7 +248,6 @@ window.addEventListener('load', () => {
     } else {
       changeBoundary();
       saveToLocalStoreage();
-      ribeyeImageData = ribeyeContext.getImageData(0,0,canvasWidth,canvasHeight).data;
     }
 
     // 描画中に記録していた値をリセットする
@@ -280,10 +256,20 @@ window.addEventListener('load', () => {
 
     isDrag = false;
     isCrossedMask = false;
+  }
 
-    // canvasにある画像をdownloadURLとして更新
-    let base64 = canvas.toDataURL("image/jpeg");
-    downloadButton.href = base64;
+  function downloadImg() {
+    let imagedata = context.getImageData(0, 0, canvasWidth, canvasHeight); 
+    let BMPWriter = new TBMPWriter(imagedata);
+    // path = 20210817-153843_Irongate/cross_section/20210815232725_0199333837010053310201982011210813211026212128.jpg
+    // name = 20210815232725_0199333837010053310201982011210813211026212128.jpg
+    // filename = 20210815232725_0199333837010053310201982011210813211026212128
+    let path =  loadedPathAndImgList[imgCount][0][1];
+    let name = path.split("/")[2];
+    let filename = name.substr(0, name.length-4);
+   
+    BMPWriter.SaveToFile(filename + ".bmp");
+    imgForward();
   }
 
   function draw(event) {
@@ -322,6 +308,7 @@ window.addEventListener('load', () => {
     clearButton.addEventListener('click', clearExceptImg);
     imgForwardButton.addEventListener('click', imgForward);
     imgBackwardButton.addEventListener('click', imgBackward);
+    downloadButton.addEventListener('click', downloadImg);
     addEventListenerToCanvas(canvas);
     addEventListenerToCanvas(ribeyeCanvas);
   }
@@ -372,11 +359,6 @@ window.addEventListener('load', () => {
     isLoadedImage = true
   }
 
-  function initLocalStorage() {
-    myStorage.setItem("__log", JSON.stringify([]));
-  }
-  
   initEventHandler();
-  initLocalStorage();
   fileInput.addEventListener('change', loadFileDatas, false);
 });
