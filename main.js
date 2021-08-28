@@ -1,7 +1,4 @@
 window.addEventListener('load', () => {
-    // ストレージの呼び出し
-  let myStorage = localStorage;
-
   const clearButton = document.querySelector('#clear-button');
   const downloadButton = document.querySelector('#download-button');
   const imgForwardButton = document.querySelector('#img-forward-button');
@@ -10,8 +7,8 @@ window.addEventListener('load', () => {
   const fileInput = document.getElementById('file');
   let imgCount = 0;
   
-  const canvasWidth = 2200;
-  const canvasHeight = 1500;
+  let canvasWidth = 4000;
+  let canvasHeight = 3000;
 
   const canvas = document.querySelector('#preview-draw-area');
   const context = canvas.getContext('2d');
@@ -31,9 +28,8 @@ window.addEventListener('load', () => {
   let oriCrossSectionImg = new Image();
   let cvOriCrossSectionImg = cv.Mat.ones(canvasHeight, canvasWidth, cv.CV_8UC3);
   let preCrossSectionImg = cv.Mat.ones(canvasHeight, canvasWidth, cv.CV_8UC3);
-  let oriRibeyeImg = new Image();
   let preRibeyeImg = cv.Mat.ones(canvasHeight, canvasWidth, cv.CV_8UC3);
-
+  let oriRibeyeImg = new Image();
 
   let loadedPathAndImgList = [];
 
@@ -101,8 +97,7 @@ window.addEventListener('load', () => {
     imgForwardButton.disabled = true;
     imgBackwardButton.disabled = true;
     isChangedContour = false;
-    setCrossSectionImage(loadedPathAndImgList[imgCount][0]);
-    setAndGetRibeyeImage(loadedPathAndImgList[imgCount][1]);
+    setImages(loadedPathAndImgList[imgCount]);
   }
 
   function imgBackward() {
@@ -110,8 +105,7 @@ window.addEventListener('load', () => {
     imgForwardButton.disabled = true;
     imgBackwardButton.disabled = true;
     isChangedContour = false;
-    setCrossSectionImage(loadedPathAndImgList[imgCount][0]);
-    setAndGetRibeyeImage(loadedPathAndImgList[imgCount][1]);
+    setImages(loadedPathAndImgList[imgCount]);
   }
 
   function checkImgbtnEnable(imgCount) {
@@ -125,27 +119,38 @@ window.addEventListener('load', () => {
     }
   }
 
-  function setAndGetRibeyeImage(dataAndPath) {
-    let reader = new FileReader();
-    // ファイル読み込みに成功したときの処理
-    reader.onload = function() {
+  function setImages(dataAndPaths) {
+    let reader = new FileReader;
+      
+    reader.readAsDataURL(dataAndPaths[1][0]);
+    reader.addEventListener("load", function(){
       oriRibeyeImg.src = reader.result;
-      oriRibeyeImg.onload = function() {
+      oriRibeyeImg.addEventListener("load", function(){
+        // タイミング的にちょっと危ないけど、個々がcanvasWidth, height を取得できる最速タイミング
+        // TODO: ribeyeimageとsectionimageの処理を分けないほうが良い。
+        canvasWidth = this.width;
+        canvasHeight =this.height;
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+        ribeyeCanvas.width = canvasWidth;
+        ribeyeCanvas.height = canvasHeight;
+
         // canvas内の要素をクリアして、画像を描画。imagedataを取得
         ribeyeContext.clearRect(0, 0, canvasWidth, canvasHeight);
         ribeyeContext.drawImage(oriRibeyeImg, 0, 0, canvasWidth, canvasHeight);
-      }
-    }
-    // index番目のpreview, ribeyeの読み込みを行う
-    reader.readAsDataURL(dataAndPath[0]);
+        setCrossSectionImage(dataAndPaths[0]);
+      });
+    });
+
   }
 
   function setCrossSectionImage(dataAndPath) {
     let reader = new FileReader();
-    // ファイル読み込みに成功したときの処理
-    reader.onload = function() {
+
+    reader.readAsDataURL(dataAndPath[0]);
+    reader.addEventListener("load", function(){
       oriCrossSectionImg.src = reader.result;
-      oriCrossSectionImg.onload = function() {
+      oriCrossSectionImg.addEventListener("load", function(){
         // canvas内の要素をクリアして、画像を描画。imagedataを取得
         context.clearRect(0, 0, canvasWidth, canvasHeight);
         context.drawImage(oriCrossSectionImg, 0, 0, canvasWidth, canvasHeight);
@@ -154,10 +159,8 @@ window.addEventListener('load', () => {
         changeBoundary()
         saveToLocalStoreage();
         setTimeout(checkImgbtnEnable, 1000, imgCount);
-      }
-    }
-    // index番目のpreview, ribeyeの読み込みを行う
-    reader.readAsDataURL(dataAndPath[0]);
+      });
+    });
   }
 
   function isInsideMask(x, y) {
@@ -219,26 +222,31 @@ window.addEventListener('load', () => {
   // 「context.beginPath()」と「context.closePath()」を都度draw関数内で実行するよりも、
   // 線の描き始め(dragStart関数)と線の描き終わり(dragEnd)で1回ずつ読んだほうがより綺麗に線画書ける
   function dragStart(event) {
+    let x = event.layerX;
+    let y = event.layerY;
+
     context.beginPath();
     ribeyeContext.beginPath();
     isDrag = true;
-    isStartInsideMask = isInsideMask(event.layerX, event.layerY);
+    isStartInsideMask = isInsideMask(x, y);
 
-    startPosition.x = event.layerX;
-    startPosition.y = event.layerY;
+    startPosition.x = x;
+    startPosition.y = y;
   }
 
   function dragEnd(event) {
     if (!isDrag) {
       return;
     }
+    let x = event.layerX;
+    let y = event.layerY;
 
     context.closePath();
     ribeyeContext.closePath();
-    isEndInsideMask = isInsideMask(event.layerX, event.layerY);
+    isEndInsideMask = isInsideMask(x, y);
 
-    endPosition.x = event.layerX;
-    endPosition.y = event.layerY;
+    endPosition.x = x;
+    endPosition.y = y;
 
     let isAddArea = isInsideMask(startPosition.x, startPosition.y) && isInsideMask(endPosition.x, endPosition.y);
     let isClipArea =  !isInsideMask(startPosition.x, startPosition.y) && !isInsideMask(endPosition.x, endPosition.y);
@@ -353,8 +361,7 @@ window.addEventListener('load', () => {
   // canvasにその一枚目を表示、画像遷移ボタンを有効にする。
   function loadFileDatas(e) {
     createSortedPathAndImgList(e);
-    setCrossSectionImage(loadedPathAndImgList[0][0]);
-    setAndGetRibeyeImage(loadedPathAndImgList[0][1]);
+    setImages(loadedPathAndImgList[0]);
     imgForwardButton.disabled = false;
     isLoadedImage = true
   }
