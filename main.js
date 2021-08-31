@@ -25,6 +25,7 @@ window.addEventListener('load', () => {
   ribeyeConterCanvas.width = canvasWidth;
   ribeyeConterCanvas.height = canvasHeight;
 
+  // TODO: メモリリークの原因探索。このへんがあやしいけど。
   let oriCrossSectionImg = new Image();
   let cvOriCrossSectionImg = cv.Mat.ones(canvasHeight, canvasWidth, cv.CV_8UC3);
   let preCrossSectionImg = cv.Mat.ones(canvasHeight, canvasWidth, cv.CV_8UC3);
@@ -37,7 +38,7 @@ window.addEventListener('load', () => {
   let isEndInsideMask = false;
   let isCrossedMask = false;
   let isChangedContour = false;
-  
+
   // 始点、終点、現在点のマウスのcanvas上のxy座標
   const startPosition = {x: null, y: null};
   const endPosition = {x: null, y: null};
@@ -73,7 +74,9 @@ window.addEventListener('load', () => {
   }
 
   function saveToLocalStoreage() {
+    preRibeyeImg.delete();
     preRibeyeImg = cv.imread("ribeye-area");
+    preCrossSectionImg.delete();
     preCrossSectionImg = cv.imread("preview-draw-area");
  }
 
@@ -111,7 +114,9 @@ window.addEventListener('load', () => {
   function checkImgbtnEnable(imgCount) {
     if (imgCount <= 0) {
       imgBackwardButton.disabled = true;
+      imgForwardButton.disabled = false;
     } else if (imgCount >= loadedPathAndImgList.length - 1) {
+      imgBackwardButton.disabled = false;
       imgForwardButton.disabled = true;
     } else {
       imgBackwardButton.disabled = false;
@@ -123,9 +128,9 @@ window.addEventListener('load', () => {
     let reader = new FileReader;
       
     reader.readAsDataURL(dataAndPaths[1][0]);
-    reader.addEventListener("load", function(){
+    reader.onload = function() {
       oriRibeyeImg.src = reader.result;
-      oriRibeyeImg.addEventListener("load", function(){
+      oriRibeyeImg.onload =  function() {
         // タイミング的にちょっと危ないけど、個々がcanvasWidth, height を取得できる最速タイミング
         // TODO: ribeyeimageとsectionimageの処理を分けないほうが良い。
         canvasWidth = this.width;
@@ -134,33 +139,32 @@ window.addEventListener('load', () => {
         canvas.height = canvasHeight;
         ribeyeCanvas.width = canvasWidth;
         ribeyeCanvas.height = canvasHeight;
-
         // canvas内の要素をクリアして、画像を描画。imagedataを取得
         ribeyeContext.clearRect(0, 0, canvasWidth, canvasHeight);
-        ribeyeContext.drawImage(oriRibeyeImg, 0, 0, canvasWidth, canvasHeight);
+        ribeyeContext.drawImage(oriRibeyeImg, 0, 0, canvasWidth, canvasHeight)
         setCrossSectionImage(dataAndPaths[0]);
-      });
-    });
-
+      };
+    };
   }
 
   function setCrossSectionImage(dataAndPath) {
     let reader = new FileReader();
 
     reader.readAsDataURL(dataAndPath[0]);
-    reader.addEventListener("load", function(){
+    reader.onload =  function() {
       oriCrossSectionImg.src = reader.result;
-      oriCrossSectionImg.addEventListener("load", function(){
+      oriCrossSectionImg.onload = function() {
         // canvas内の要素をクリアして、画像を描画。imagedataを取得
         context.clearRect(0, 0, canvasWidth, canvasHeight);
         context.drawImage(oriCrossSectionImg, 0, 0, canvasWidth, canvasHeight);
-        relativePathDiplay.textContent = dataAndPath[1];  
+        relativePathDiplay.textContent = dataAndPath[1];
+        cvOriCrossSectionImg.delete();
         cvOriCrossSectionImg = cv.imread("preview-draw-area");
         changeBoundary()
         saveToLocalStoreage();
         setTimeout(checkImgbtnEnable, 1000, imgCount);
-      });
-    });
+      };
+    };
   }
 
   function isInsideMask(x, y) {
@@ -175,7 +179,9 @@ window.addEventListener('load', () => {
     }
   }
 
-  function detectContour() {
+  function changeBoundary() {
+    let ori4 = cvOriCrossSectionImg.clone();
+    let ori3 = cv.Mat.ones(canvasHeight, canvasWidth, cv.CV_8UC3);
     let ribeyeOri = cv.imread("ribeye-area");
     let ribeyeOriGray = new cv.Mat();
     let contours = new cv.MatVector();
@@ -198,25 +204,18 @@ window.addEventListener('load', () => {
 
     cv.drawContours(maskResult, contours, maxAreaIndex, new cv.Scalar(255, 255, 255), cv.FILLED);
     cv.imshow("ribeye-area", maskResult);
+    
+    cv.cvtColor(ori4, ori3, cv.COLOR_RGBA2RGB); //8UC4 -> 8UC3への変更。imreadすると8UC4に勝手に変換されてしまう。
+    cv.drawContours(ori3, contours, maxAreaIndex, new cv.Scalar(0, 255, 0), 3);
 
+    cv.imshow("preview-draw-area", ori3);
+    ori4.delete();
+    ori3.delete();
     ribeyeOri.delete();;
     ribeyeOriGray.delete();
     hierarchy.delete();
     maskResult.delete();
-
-    return [contours, maxAreaIndex];
-  }
-
-  function changeBoundary() {
-    let ori = cv.Mat.ones(canvasHeight, canvasWidth, cv.CV_8UC4);
-    let contourResult = detectContour();
-    
-    ori = cvOriCrossSectionImg.clone();
-    cv.cvtColor(ori, ori, cv.COLOR_RGBA2RGB); //8UC4 -> 8UC3への変更。imreadすると8UC4に勝手に変換されてしまう。
-    cv.drawContours(ori, contourResult[0], contourResult[1], new cv.Scalar(0, 255, 0), 3);
-
-    cv.imshow("preview-draw-area", ori);
-    ori.delete();
+    contours.delete();
   }
   
   // 「context.beginPath()」と「context.closePath()」を都度draw関数内で実行するよりも、
