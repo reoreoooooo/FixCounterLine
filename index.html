@@ -12,21 +12,30 @@
     <input type="file" name="file" id="file" webkitdirectory>
     <p id="relative-path"></p>
   </div>
+
+
+<div>
   <canvas
     id="preview-draw-area"
-    style="border: 1px solid #000000;"></canvas>
+    style="border: 1px solid #000000;">
+  </canvas>
+</div>
+<div>
+  <button id="clear-button" style="width: 400px; height: 300px; padding: 10px; font-size: 50px;">全消し</button>
+  <button id="download-button" style="width: 400px; height: 300px; padding: 10px; font-size: 50px;">保存</button>
+  <button id="img-backward-button" style="width: 400px; height: 300px; padding: 10px; font-size: 50px;" disabled>＜</button>
+  <button id="img-forward-button" style="width: 400px; height: 300px; padding: 10px; font-size: 50px;" disabled>＞</button>
+  <div id ="counter" style="width: 400px; height: 300px; padding: 140px; font-size: 40px;"></div>
+</div>
+
+
   <canvas
     id="ribeye-area"
     style="border: 1px solid #000000;"></canvas>
   <canvas
     id="ribeye-contour-area"
     style="border: 1px solid #000000;"></canvas>
-  <div>
-    <button id="clear-button">全消し</button>
-    <button id="download-button">ダウンロード</button>
-    <button id="img-backward-button" disabled>＜</button>
-    <button id="img-forward-button" disabled>＞</button>
-  </div>
+
   <script src="main.js"></script>
   <script src="https://docs.opencv.org/3.4.1/opencv.js"></script>
   <script src="BMP.js"></script>
@@ -37,6 +46,13 @@
     }
     #ribeye-contour-area{
       display: none;
+    }
+    #preview-draw-area {
+      float: left;
+    }
+    #clear-button, #download-button, #img-backward-button, #img-forward-button, #counter {
+      float: left;
+    
     }
   </style>
   

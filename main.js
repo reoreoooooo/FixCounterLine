@@ -3,12 +3,13 @@ window.addEventListener('load', () => {
   const downloadButton = document.querySelector('#download-button');
   const imgForwardButton = document.querySelector('#img-forward-button');
   const imgBackwardButton = document.querySelector('#img-backward-button');
+  const counter = document.querySelector("#counter");
   const relativePathDiplay = document.querySelector('#relative-path');
   const fileInput = document.getElementById('file');
   let imgCount = 0;
   
-  let canvasWidth = 4000;
-  let canvasHeight = 3000;
+  let canvasWidth = 2200;
+  let canvasHeight = 1800;
 
   const canvas = document.querySelector('#preview-draw-area');
   const context = canvas.getContext('2d');
@@ -132,7 +133,6 @@ window.addEventListener('load', () => {
       oriRibeyeImg.src = reader.result;
       oriRibeyeImg.onload =  function() {
         // タイミング的にちょっと危ないけど、個々がcanvasWidth, height を取得できる最速タイミング
-        // TODO: ribeyeimageとsectionimageの処理を分けないほうが良い。
         canvasWidth = this.width;
         canvasHeight =this.height;
         canvas.width = canvasWidth;
@@ -143,6 +143,7 @@ window.addEventListener('load', () => {
         ribeyeContext.clearRect(0, 0, canvasWidth, canvasHeight);
         ribeyeContext.drawImage(oriRibeyeImg, 0, 0, canvasWidth, canvasHeight)
         setCrossSectionImage(dataAndPaths[0]);
+        counter.textContent = String(imgCount + 1) + "/" + String(loadedPathAndImgList.length) 
       };
     };
   }
@@ -275,8 +276,12 @@ window.addEventListener('load', () => {
     let name = path.split("/")[2];
     let filename = name.substr(0, name.length-4);
    
-    BMPWriter.SaveToFile(filename + ".bmp");
-    imgForward();
+    BMPWriter.SaveToFile("./rin/"+filename + ".bmp");
+
+    if (imgCount < loadedPathAndImgList.length - 1) {
+      console.log("imgfoward")
+      imgForward();
+    }
   }
 
   function draw(event) {
@@ -307,8 +312,12 @@ window.addEventListener('load', () => {
   function addEventListenerToCanvas(canvas) {
     canvas.addEventListener('mousedown', dragStart);
     canvas.addEventListener('mouseup', dragEnd);
-    canvas.addEventListener('mouseout', dragEnd); // TODO: 余分に出力されている。直す必要があるかどうか検討
     canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('touchstart', dragStart);
+    canvas.addEventListener('touchend', dragEnd);
+    canvas.addEventListener('touchmove', draw);
+    // canvas.addEventListener('mouseout', dragEnd); // TODO: 余分に出力されている。直す必要があるかどうか検討
+
   }
 
   function initEventHandler() {
@@ -350,10 +359,34 @@ window.addEventListener('load', () => {
       alert('cross_section, ribeye_mask, preview の写真枚数が一致しません');
       return;
     }
+
+    console.log("start")
+
     
     for (let i = 0; i < crossDirList.length; i++) {
-      loadedPathAndImgList.push([crossDirList[i], ribeyeDirList[i], previewDirList[i]]);
+      let crossName = crossDirList[i][1].slice(crossDirList[i][1].lastIndexOf("/")+1, -4);
+      let true_j;
+      let true_k;
+
+      for (let j = 0; j < ribeyeDirList.length; j++) {   
+        let ribeyeName = ribeyeDirList[j][1].slice(ribeyeDirList[j][1].lastIndexOf("/")+1, -4);
+        if (crossName == ribeyeName) {
+          true_j = j
+          break
+        }
+      }
+
+      for (let k = 0; previewDirList.length; k++) {
+        let previewName = previewDirList[k][1].slice(previewDirList[k][1].lastIndexOf("/")+1, -4);
+        if (crossName == previewName) {
+          true_k = k
+          break
+        }
+      }
+
+      loadedPathAndImgList.push([crossDirList[i], ribeyeDirList[true_j], previewDirList[true_k]]);
     }
+
   }
 
   // デフォルトでは名前降順のfileData, relativePathを、[cross, ribeye, preview], []... の名前昇順のリスト構造に整え
