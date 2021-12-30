@@ -222,6 +222,16 @@ window.addEventListener('load', () => {
   // 「context.beginPath()」と「context.closePath()」を都度draw関数内で実行するよりも、
   // 線の描き始め(dragStart関数)と線の描き終わり(dragEnd)で1回ずつ読んだほうがより綺麗に線画書ける
   function dragStart(event) {
+    // 右クリックのmousedownの場合returnさせる
+    event = event || window.event;
+
+    if (event.button == 2) {
+      // 左クリック event.button == 0, 右クリック event.button == 2
+      console.log("右クリック　mousedown");
+      return
+    }
+    console.log("左クリック　mousedown");
+
     let x = event.layerX;
     let y = event.layerY;
 
@@ -235,9 +245,18 @@ window.addEventListener('load', () => {
   }
 
   function dragEnd(event) {
+    // 左クリックのmousedownの場合returnさせる
+    event = event || window.event;
+    if (event.button == 2) {
+      console.log("右クリック　mouseup");
+      return
+    }
+    console.log("左クリック　mouseup");
+    
     if (!isDrag) {
       return;
     }
+
     let x = event.layerX;
     let y = event.layerY;
 
@@ -276,7 +295,7 @@ window.addEventListener('load', () => {
     let name = path.split("/")[2];
     let filename = name.substr(0, name.length-4);
    
-    BMPWriter.SaveToFile("./rin/"+filename + ".bmp");
+    BMPWriter.SaveToFile(filename + ".bmp");
 
     if (imgCount < loadedPathAndImgList.length - 1) {
       console.log("imgfoward")
@@ -325,6 +344,10 @@ window.addEventListener('load', () => {
     imgForwardButton.addEventListener('click', imgForward);
     imgBackwardButton.addEventListener('click', imgBackward);
     downloadButton.addEventListener('click', downloadImg);
+    // clearButton.addEventListener('contextmenu', clearExceptImg);
+    // imgForwardButton.addEventListener('contextmenu', imgForward);
+    // imgBackwardButton.addEventListener('contextmenu', imgBackward);
+    // downloadButton.addEventListener('contextmenu', downloadImg);
     addEventListenerToCanvas(canvas);
     addEventListenerToCanvas(ribeyeCanvas);
   }
@@ -401,3 +424,8 @@ window.addEventListener('load', () => {
   initEventHandler();
   fileInput.addEventListener('change', loadFileDatas, false);
 });
+
+// 右クリックのメニューが出ないようにする
+document.oncontextmenu = function () {
+  return false;
+}
