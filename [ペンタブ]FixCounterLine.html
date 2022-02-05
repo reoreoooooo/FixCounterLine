@@ -55,967 +55,537 @@
   </style>
   
   <script type="text/javascript">
-    window.addEventListener('load', () => {
-    const clearButton = document.querySelector('#clear-button');
-    const downloadButton = document.querySelector('#download-button');
-    const imgForwardButton = document.querySelector('#img-forward-button');
-    const imgBackwardButton = document.querySelector('#img-backward-button');
-    const counter = document.querySelector("#counter");
-    const relativePathDiplay = document.querySelector('#relative-path');
-    const fileInput = document.getElementById('file');
-    let imgCount = 0;
-    
-    let canvasWidth = 2200;
-    let canvasHeight = 1800;
+window.addEventListener('load', () => {
+  const clearButton = document.querySelector('#clear-button');
+  const downloadButton = document.querySelector('#download-button');
+  const imgForwardButton = document.querySelector('#img-forward-button');
+  const imgBackwardButton = document.querySelector('#img-backward-button');
+  const counter = document.querySelector("#counter");
+  const relativePathDiplay = document.querySelector('#relative-path');
+  const fileInput = document.getElementById('file');
+  // const csvInput = document.getElementById('csv');
+  let imgCount = 0;
+  
+  let canvasWidth = 2200;
+  let canvasHeight = 1800;
 
-    const canvas = document.querySelector('#preview-draw-area');
-    const context = canvas.getContext('2d');
-    canvas.width = canvasWidth;
-    canvas.height = canvasHeight;
+  const canvas = document.querySelector('#preview-draw-area');
+  const context = canvas.getContext('2d');
+  canvas.width = canvasWidth;
+  canvas.height = canvasHeight;
 
-    let ribeyeCanvas = document.querySelector('#ribeye-area');
-    let ribeyeContext = ribeyeCanvas.getContext('2d');
-    ribeyeCanvas.width = canvasWidth;
-    ribeyeCanvas.height = canvasHeight;
+  let ribeyeCanvas = document.querySelector('#ribeye-area');
+  let ribeyeContext = ribeyeCanvas.getContext('2d');
+  ribeyeCanvas.width = canvasWidth;
+  ribeyeCanvas.height = canvasHeight;
 
-    let ribeyeConterCanvas = document.querySelector('#ribeye-contour-area');
-    let ribeyeConterContext = ribeyeConterCanvas.getContext('2d');
-    ribeyeConterCanvas.width = canvasWidth;
-    ribeyeConterCanvas.height = canvasHeight;
+  let ribeyeConterCanvas = document.querySelector('#ribeye-contour-area');
+  let ribeyeConterContext = ribeyeConterCanvas.getContext('2d');
+  ribeyeConterCanvas.width = canvasWidth;
+  ribeyeConterCanvas.height = canvasHeight;
 
-    // TODO: メモリリークの原因探索。このへんがあやしいけど。
-    let oriCrossSectionImg = new Image();
-    let cvOriCrossSectionImg = cv.Mat.ones(canvasHeight, canvasWidth, cv.CV_8UC3);
-    let preCrossSectionImg = cv.Mat.ones(canvasHeight, canvasWidth, cv.CV_8UC3);
-    let preRibeyeImg = cv.Mat.ones(canvasHeight, canvasWidth, cv.CV_8UC3);
-    let oriRibeyeImg = new Image();
+  let oriCrossSectionImg = new Image();
+  let cvOriCrossSectionImg = cv.Mat.ones(canvasHeight, canvasWidth, cv.CV_8UC3);
+  let preCrossSectionImg = cv.Mat.ones(canvasHeight, canvasWidth, cv.CV_8UC3);
+  let preRibeyeImg = cv.Mat.ones(canvasHeight, canvasWidth, cv.CV_8UC3);
+  let oriRibeyeImg = new Image();
 
-    let loadedPathAndImgList = [];
+  let loadedPathAndImgList = [];
+  let csvData = [];
+  // [0]: Owner, [1]: TakenAt, [2]: BarcodeNo, [3]: BodyNo
 
-    let isStartInsideMask = false;
-    let isEndInsideMask = false;
-    let isCrossedMask = false;
-    let isChangedContour = false;
+  let isStartInsideMask = false;
+  let isEndInsideMask = false;
+  let isCrossedMask = false;
+  let isChangedContour = false;
+  let isAbleToUpload = false;
 
-    // 始点、終点、現在点のマウスのcanvas上のxy座標
-    const startPosition = {x: null, y: null};
-    const endPosition = {x: null, y: null};
-    const nowPosition = {x: null, y: null};
-    
-    // マウスがドラッグされているか判断するためのフラグ
-    let isDrag = false;
-    let isLoadedImage = false;
-    
-    // 絵を書く
-    function boundaryChangeDraw(x, y) {
-        // ドラッグしながらしか絵を書くことが出来ない。imageを読み込んでいないと書けない
-        if(!isDrag || !isLoadedImage) {
-        return;
-        }
-    
-        // context.moveToで設定した位置から、context.lineToで設定した位置までの線を引く。
-        if (nowPosition.x === null || nowPosition.y === null) {
-        context.moveTo(x, y);
-        ribeyeContext.moveTo(x, y);
-        } else {
-        context.moveTo(nowPosition.x, nowPosition.y);
-        ribeyeContext.moveTo(nowPosition.x, nowPosition.y);
-        }
-        context.lineTo(x, y);
-        ribeyeContext.lineTo(x, y);
-        context.stroke();
-        ribeyeContext.stroke();
-    
-        // 現在のマウス位置を記録して、次回線を書くときの開始点に使う
-        nowPosition.x = x;
-        nowPosition.y = y;
+  // 始点、終点、現在点のマウスのcanvas上のxy座標
+  const startPosition = {x: null, y: null};
+  const endPosition = {x: null, y: null};
+  const nowPosition = {x: null, y: null};
+  
+  // マウスがドラッグされているか判断するためのフラグ
+  let isDrag = false;
+  let isLoadedImage = false;
+  
+  // 絵を書く
+  function boundaryChangeDraw(x, y) {
+    // ドラッグしながらしか絵を書くことが出来ない。imageを読み込んでいないと書けない
+    if(!isDrag || !isLoadedImage) {
+      return;
     }
-
-    function saveToLocalStoreage() {
-        preRibeyeImg.delete();
-        preRibeyeImg = cv.imread("ribeye-area");
-        preCrossSectionImg.delete();
-        preCrossSectionImg = cv.imread("preview-draw-area");
+  
+    // context.moveToで設定した位置から、context.lineToで設定した位置までの線を引く。
+    if (nowPosition.x === null || nowPosition.y === null) {
+      context.moveTo(x, y);
+      ribeyeContext.moveTo(x, y);
+    } else {
+      context.moveTo(nowPosition.x, nowPosition.y);
+      ribeyeContext.moveTo(nowPosition.x, nowPosition.y);
     }
+    context.lineTo(x, y);
+    ribeyeContext.lineTo(x, y);
+    context.stroke();
+    ribeyeContext.stroke();
+  
+    // 現在のマウス位置を記録して、次回線を書くときの開始点に使う
+    nowPosition.x = x;
+    nowPosition.y = y;
+  }
 
-    // Canvasを戻す
-    function prevCanvas() {
-        cv.imshow("ribeye-area", preRibeyeImg);
-        cv.imshow("preview-draw-area", preCrossSectionImg);
+  function saveToLocalStoreage() {
+    preRibeyeImg.delete();
+    preRibeyeImg = cv.imread("ribeye-area");
+    preCrossSectionImg.delete();
+    preCrossSectionImg = cv.imread("preview-draw-area");
+ }
+
+  // Canvasを戻す
+  function prevCanvas() {
+    cv.imshow("ribeye-area", preRibeyeImg);
+    cv.imshow("preview-draw-area", preCrossSectionImg);
+  }
+
+  function clearExceptImg() {
+    context.clearRect(0, 0, canvasWidth, canvasHeight);
+    context.drawImage(oriCrossSectionImg, 0, 0, canvasWidth, canvasHeight);
+    ribeyeContext.clearRect(0, 0, canvasWidth, canvasHeight);
+    ribeyeContext.drawImage(oriRibeyeImg, 0, 0, canvasWidth, canvasHeight);
+    changeBoundary();
+    saveToLocalStoreage();
+  }
+
+  function imgForward() {
+    imgCount++;
+    imgForwardButton.disabled = true;
+    imgBackwardButton.disabled = true;
+    isChangedContour = false;
+    setImages(loadedPathAndImgList[imgCount]);
+  }
+
+  function imgBackward() {
+    imgCount--;
+    imgForwardButton.disabled = true;
+    imgBackwardButton.disabled = true;
+    isChangedContour = false;
+    setImages(loadedPathAndImgList[imgCount]);
+  }
+
+  function checkImgbtnEnable(imgCount) {
+    if (imgCount <= 0) {
+      imgBackwardButton.disabled = true;
+      imgForwardButton.disabled = false;
+    } else if (imgCount >= loadedPathAndImgList.length - 1) {
+      imgBackwardButton.disabled = false;
+      imgForwardButton.disabled = true;
+    } else {
+      imgBackwardButton.disabled = false;
+      imgForwardButton.disabled = false;
     }
+  }
 
-    function clearExceptImg() {
+  function setImages(dataAndPaths) {
+    let reader = new FileReader;
+      
+    reader.readAsDataURL(dataAndPaths[1][0]);
+    reader.onload = function() {
+      oriRibeyeImg.src = reader.result;
+      oriRibeyeImg.onload =  function() {
+        // タイミング的にちょっと危ないけど、個々がcanvasWidth, height を取得できる最速タイミング
+        canvasWidth = this.width;
+        canvasHeight =this.height;
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+        ribeyeCanvas.width = canvasWidth;
+        ribeyeCanvas.height = canvasHeight;
+        // canvas内の要素をクリアして、画像を描画。imagedataを取得
+        ribeyeContext.clearRect(0, 0, canvasWidth, canvasHeight);
+        ribeyeContext.drawImage(oriRibeyeImg, 0, 0, canvasWidth, canvasHeight)
+        setCrossSectionImage(dataAndPaths[0]);
+        counter.textContent = String(imgCount + 1) + "/" + String(loadedPathAndImgList.length) 
+      };
+    };
+  }
+
+  function setCrossSectionImage(dataAndPath) {
+    let reader = new FileReader();
+
+    reader.readAsDataURL(dataAndPath[0]);
+    reader.onload =  function() {
+      oriCrossSectionImg.src = reader.result;
+      oriCrossSectionImg.onload = function() {
+        // canvas内の要素をクリアして、画像を描画。imagedataを取得
         context.clearRect(0, 0, canvasWidth, canvasHeight);
         context.drawImage(oriCrossSectionImg, 0, 0, canvasWidth, canvasHeight);
-        ribeyeContext.clearRect(0, 0, canvasWidth, canvasHeight);
-        ribeyeContext.drawImage(oriRibeyeImg, 0, 0, canvasWidth, canvasHeight);
-        changeBoundary();
+        relativePathDiplay.textContent = dataAndPath[1];
+        cvOriCrossSectionImg.delete();
+        cvOriCrossSectionImg = cv.imread("preview-draw-area");
+        changeBoundary()
         saveToLocalStoreage();
+        setTimeout(checkImgbtnEnable, 1000, imgCount);
+      };
+    };
+  }
+
+  function isInsideMask(x, y) {
+    let r = preRibeyeImg.ucharPtr(y, x)[0];
+    let g = preRibeyeImg.ucharPtr(y, x)[1];
+    let b = preRibeyeImg.ucharPtr(y, x)[2];
+
+    if (r == 255 && g == 255 && b == 255) {
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  function changeBoundary() {
+    let ori4 = cvOriCrossSectionImg.clone();
+    let ori3 = cv.Mat.ones(canvasHeight, canvasWidth, cv.CV_8UC3);
+    let ribeyeOri = cv.imread("ribeye-area");
+    let ribeyeOriGray = new cv.Mat();
+    let contours = new cv.MatVector();
+    let hierarchy = new cv.Mat();
+    let maskResult = cv.Mat.ones(canvasHeight, canvasWidth, cv.CV_8UC3);　// opencvでは(縦, 横)になることに注意
+    let maxArea = 0;
+    let maxAreaIndex = 0;
+
+    cv.cvtColor(ribeyeOri, ribeyeOriGray, cv.COLOR_RGBA2GRAY, 0);
+    cv.findContours(ribeyeOriGray, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE, new cv.Point(0, 0));
+    //　一番大きな多角形を取得
+    for (let i = 0; i < contours.size(); i++) {
+      let cnt = contours.get(i);
+      let area = cv.contourArea(cnt, false);
+      if (area > maxArea) {
+        maxArea = area;
+        maxAreaIndex = i;
+      }
     }
 
-    function imgForward() {
-        imgCount++;
-        imgForwardButton.disabled = true;
-        imgBackwardButton.disabled = true;
-        isChangedContour = false;
-        setImages(loadedPathAndImgList[imgCount]);
+    cv.drawContours(maskResult, contours, maxAreaIndex, new cv.Scalar(255, 255, 255), cv.FILLED);
+    cv.imshow("ribeye-area", maskResult);
+    
+    cv.cvtColor(ori4, ori3, cv.COLOR_RGBA2RGB); //8UC4 -> 8UC3への変更。imreadすると8UC4に勝手に変換されてしまう。
+    cv.drawContours(ori3, contours, maxAreaIndex, new cv.Scalar(0, 255, 0), 3);
+
+    cv.imshow("preview-draw-area", ori3);
+    ori4.delete();
+    ori3.delete();
+    ribeyeOri.delete();;
+    ribeyeOriGray.delete();
+    hierarchy.delete();
+    maskResult.delete();
+    contours.delete();
+  }
+  
+  // 「context.beginPath()」と「context.closePath()」を都度draw関数内で実行するよりも、
+  // 線の描き始め(dragStart関数)と線の描き終わり(dragEnd)で1回ずつ読んだほうがより綺麗に線画書ける
+  function dragStart(event) {
+    // 右クリックのmousedownの場合returnさせる
+    event = event || window.event;
+
+    if (event.button == 0) {
+      // 左クリック event.button == 0, 右クリック event.button == 2
+      console.log("左クリック　mousedown");
+      return
+    }
+    console.log("右クリック　mousedown");
+
+    let x = event.layerX;
+    let y = event.layerY;
+
+    context.beginPath();
+    ribeyeContext.beginPath();
+    isDrag = true;
+    isStartInsideMask = isInsideMask(x, y);
+
+    startPosition.x = x;
+    startPosition.y = y;
+  }
+
+  function dragEnd(event) {
+    // 左クリックのmousedownの場合returnさせる
+    event = event || window.event; // IE対応
+    if (event.button == 0) {
+      console.log("左クリック　mouseup");
+      return
+    }
+    console.log("右クリック　mouseup");
+    
+    if (!isDrag) {
+      return;
     }
 
-    function imgBackward() {
-        imgCount--;
-        imgForwardButton.disabled = true;
-        imgBackwardButton.disabled = true;
-        isChangedContour = false;
-        setImages(loadedPathAndImgList[imgCount]);
+    let x = event.layerX;
+    let y = event.layerY;
+
+    context.closePath();
+    ribeyeContext.closePath();
+    isEndInsideMask = isInsideMask(x, y);
+
+    endPosition.x = x;
+    endPosition.y = y;
+
+    let isAddArea = isInsideMask(startPosition.x, startPosition.y) && isInsideMask(endPosition.x, endPosition.y);
+    let isClipArea =  !isInsideMask(startPosition.x, startPosition.y) && !isInsideMask(endPosition.x, endPosition.y);
+    // 内→外もしくは外→内　になった時のみpreCanvesを動作させる。
+    if (!(isAddArea || isClipArea) || (isClipArea && !(isCrossedMask))) {
+      prevCanvas();
+    } else {
+      changeBoundary();
+      saveToLocalStoreage();
     }
 
-    function checkImgbtnEnable(imgCount) {
-        if (imgCount <= 0) {
-        imgBackwardButton.disabled = true;
-        imgForwardButton.disabled = false;
-        } else if (imgCount >= loadedPathAndImgList.length - 1) {
-        imgBackwardButton.disabled = false;
-        imgForwardButton.disabled = true;
-        } else {
-        imgBackwardButton.disabled = false;
-        imgForwardButton.disabled = false;
-        }
+    // 描画中に記録していた値をリセットする
+    nowPosition.x = null;
+    nowPosition.y = null;
+
+    isDrag = false;
+    isCrossedMask = false;
+  }
+
+  function saveToFile(FileName, imgData) {
+    var a = document.createElement("a");
+    a.href = imgData
+    //a.target   = '_blank';
+    a.download = FileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+  // function uploadImg(imgData, coresCsvData) {
+  //   const url = "https://mds.meatimage.jp/api/beef/image/__auto__/input.jpg?";
+  //   const token = "36a55dc836176b49562c0f3a4b0d2f20709af9b9";
+
+  //   let params = {
+  //     method: "PUT",
+  //     headers: {
+  //       "Content-Type" : "image/png",
+  //       "Authorization": `Token ${token}`
+  //     },
+  //     body: imgData
+  //   }
+
+  //   // [0]: Owner, [1]: TakenAt, [2]: BarcodeNo, [3]: BodyNo
+  //   let barcode = coresCsvData[2];
+  //   let bodyno = coresCsvData[3];
+  //   let takenat = coresCsvData[1];
+  //   let owner = coresCsvData[0];
+
+  //   let p = {
+  //     "barcode_no" : barcode,
+  //     "body_no" : bodyno,
+  //     "taken_at" : "2022-01-11T23%3A50%3A00%2B09%3A00",
+  //     "owner" : "",
+  //     "do_analysis" : "True",
+  //     "ppmm" : "10"
+  //   };
+  //   let query = new URLSearchParams(p);
+    
+  //   fetch(url+`${query}`, params).then(response => {
+  //     console.log(response);
+  //   });
+  // }
+
+
+  function checkCorrespondCsvData(filename) {
+    for (let i = 0; i < csvData.length; i++) {
+      if (csvData[i][2] == filename.split("_")[1]) {
+        return csvData[i];
+      } 
+    }
+    return null;
+  }
+
+  function downloadImg() {
+    let imgData = canvas.toDataURL("image/png");
+    // path = 20210817-153843_Irongate/cross_section/20210815232725_0199333837010053310201982011210813211026212128.jpg
+    // name = 20210815232725_0199333837010053310201982011210813211026212128.jpg
+    // filename = 20210815232725_0199333837010053310201982011210813211026212128
+    let path =  loadedPathAndImgList[imgCount][0][1];
+    let name = path.split("/")[2];
+    let filename = name.substr(0, name.length-4);
+   
+    saveToFile(filename, imgData);
+
+    // let coresCsvData = checkCorrespondCsvData(filename);
+    // if (coresCsvData != null && isAbleToUpload == true) {
+    //   uploadImg(imgData, coresCsvData);
+    // }
+    
+    if (imgCount < loadedPathAndImgList.length - 1) {
+      console.log("imgfoward")
+      imgForward();
+    }
+  }
+
+  function draw(event) {
+    let x = event.layerX;
+    let y = event.layerY;
+
+    if (isLoadedImage && isDrag && !isCrossedMask) {
+      isCrossedMask = (isStartInsideMask && !isInsideMask(x, y)) || (!isStartInsideMask && isInsideMask(x, y));
+    }
+   
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    context.lineWidth = 5;
+    ribeyeContext.lineCap = 'round';
+    ribeyeContext.lineJoin = 'round';
+    ribeyeContext.lineWidth = 5;
+
+    if (isStartInsideMask) {
+      context.strokeStyle = "rgb(0, 255, 0)";
+      ribeyeContext.strokeStyle = "rgb(0, 255, 0)";
+    } else {
+      context.strokeStyle = "rgb(255, 0 , 0)";
+      ribeyeContext.strokeStyle = "rgb(0, 0 , 0)";
+    }
+    boundaryChangeDraw(x, y);
+  }
+
+  function addEventListenerToCanvas(canvas) {
+    canvas.addEventListener('mousedown', dragStart);
+    canvas.addEventListener('mouseup', dragEnd);
+    canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('touchstart', dragStart);
+    canvas.addEventListener('touchend', dragEnd);
+    canvas.addEventListener('touchmove', draw);
+    // canvas.addEventListener('mouseout', dragEnd); // TODO: 余分に出力されている。直す必要があるかどうか検討
+
+  }
+
+  function initEventHandler() {
+    // clearButton.addEventListener('click', clearExceptImg);
+    // imgForwardButton.addEventListener('click', imgForward);
+    // imgBackwardButton.addEventListener('click', imgBackward);
+    // downloadButton.addEventListener('click', downloadImg);
+    clearButton.addEventListener('contextmenu', clearExceptImg);
+    imgForwardButton.addEventListener('contextmenu', imgForward);
+    imgBackwardButton.addEventListener('contextmenu', imgBackward);
+    downloadButton.addEventListener('contextmenu', downloadImg);
+    addEventListenerToCanvas(canvas);
+    addEventListenerToCanvas(ribeyeCanvas);
+  }
+
+  function createSortedPathAndImgList(e) {
+    let crossDirList = [];
+    let ribeyeDirList = [];
+    let previewDirList = [];
+    for (let i = 0; i < e.target.files.length; i++) {
+      let fileData = e.target.files[i];
+
+      // 画像ファイル以外は処理をしない
+      if(!fileData.type.match('image.*')) {
+        continue
+      }
+
+      // ディレクトリの相対パス(絶対パスはセキュリティ上取得できない)
+      let relativePath = fileData.webkitRelativePath;
+
+      if (relativePath.indexOf("cross_section") != -1) {
+        crossDirList.push([fileData,relativePath]);
+      } else if (relativePath.indexOf("ribeye_mask") != -1) {
+        ribeyeDirList.push([fileData,relativePath]);
+      } else if (relativePath.indexOf("preview") != -1) {
+        previewDirList.push([fileData,relativePath]);
+      }
     }
 
-    function setImages(dataAndPaths) {
-        let reader = new FileReader;
-        
-        reader.readAsDataURL(dataAndPaths[1][0]);
-        reader.onload = function() {
-        oriRibeyeImg.src = reader.result;
-        oriRibeyeImg.onload =  function() {
-            // タイミング的にちょっと危ないけど、個々がcanvasWidth, height を取得できる最速タイミング
-            canvasWidth = this.width;
-            canvasHeight =this.height;
-            canvas.width = canvasWidth;
-            canvas.height = canvasHeight;
-            ribeyeCanvas.width = canvasWidth;
-            ribeyeCanvas.height = canvasHeight;
-            // canvas内の要素をクリアして、画像を描画。imagedataを取得
-            ribeyeContext.clearRect(0, 0, canvasWidth, canvasHeight);
-            ribeyeContext.drawImage(oriRibeyeImg, 0, 0, canvasWidth, canvasHeight)
-            setCrossSectionImage(dataAndPaths[0]);
-            counter.textContent = String(imgCount + 1) + "/" + String(loadedPathAndImgList.length) 
-        };
-        };
-    }
-
-    function setCrossSectionImage(dataAndPath) {
-        let reader = new FileReader();
-
-        reader.readAsDataURL(dataAndPath[0]);
-        reader.onload =  function() {
-        oriCrossSectionImg.src = reader.result;
-        oriCrossSectionImg.onload = function() {
-            // canvas内の要素をクリアして、画像を描画。imagedataを取得
-            context.clearRect(0, 0, canvasWidth, canvasHeight);
-            context.drawImage(oriCrossSectionImg, 0, 0, canvasWidth, canvasHeight);
-            relativePathDiplay.textContent = dataAndPath[1];
-            cvOriCrossSectionImg.delete();
-            cvOriCrossSectionImg = cv.imread("preview-draw-area");
-            changeBoundary()
-            saveToLocalStoreage();
-            setTimeout(checkImgbtnEnable, 1000, imgCount);
-        };
-        };
-    }
-
-    function isInsideMask(x, y) {
-        let r = preRibeyeImg.ucharPtr(y, x)[0];
-        let g = preRibeyeImg.ucharPtr(y, x)[1];
-        let b = preRibeyeImg.ucharPtr(y, x)[2];
-
-        if (r == 255 && g == 255 && b == 255) {
-        return true;
-        } else {
-        return false;
-        }
-    }
-
-    function changeBoundary() {
-        let ori4 = cvOriCrossSectionImg.clone();
-        let ori3 = cv.Mat.ones(canvasHeight, canvasWidth, cv.CV_8UC3);
-        let ribeyeOri = cv.imread("ribeye-area");
-        let ribeyeOriGray = new cv.Mat();
-        let contours = new cv.MatVector();
-        let hierarchy = new cv.Mat();
-        let maskResult = cv.Mat.ones(canvasHeight, canvasWidth, cv.CV_8UC3);　// opencvでは(縦, 横)になることに注意
-        let maxArea = 0;
-        let maxAreaIndex = 0;
-
-        cv.cvtColor(ribeyeOri, ribeyeOriGray, cv.COLOR_RGBA2GRAY, 0);
-        cv.findContours(ribeyeOriGray, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE, new cv.Point(0, 0));
-        //　一番大きな多角形を取得
-        for (let i = 0; i < contours.size(); i++) {
-        let cnt = contours.get(i);
-        let area = cv.contourArea(cnt, false);
-        if (area > maxArea) {
-            maxArea = area;
-            maxAreaIndex = i;
-        }
-        }
-
-        cv.drawContours(maskResult, contours, maxAreaIndex, new cv.Scalar(255, 255, 255), cv.FILLED);
-        cv.imshow("ribeye-area", maskResult);
-        
-        cv.cvtColor(ori4, ori3, cv.COLOR_RGBA2RGB); //8UC4 -> 8UC3への変更。imreadすると8UC4に勝手に変換されてしまう。
-        cv.drawContours(ori3, contours, maxAreaIndex, new cv.Scalar(0, 255, 0), 3);
-
-        cv.imshow("preview-draw-area", ori3);
-        ori4.delete();
-        ori3.delete();
-        ribeyeOri.delete();;
-        ribeyeOriGray.delete();
-        hierarchy.delete();
-        maskResult.delete();
-        contours.delete();
+    // 枚数が全て一致しない場合処理しない
+    if (!(crossDirList.length == ribeyeDirList.length && ribeyeDirList.length == previewDirList.length)) {
+      // TODO: どの写真が余っているのか、不足しているのかアラートで知らせる
+      alert('cross_section, ribeye_mask, preview の写真枚数が一致しません');
+      return;
     }
     
-    // 「context.beginPath()」と「context.closePath()」を都度draw関数内で実行するよりも、
-    // 線の描き始め(dragStart関数)と線の描き終わり(dragEnd)で1回ずつ読んだほうがより綺麗に線画書ける
-    function dragStart(event) {
-        // 左クリックのmousedownの場合returnさせる
-        event = event || window.event; // IE対応
-        if (event.button == 0) {
-        console.log("左クリック　mousedown");
-        return
+    for (let i = 0; i < crossDirList.length; i++) {
+      let crossName = crossDirList[i][1].slice(crossDirList[i][1].lastIndexOf("/")+1, -4);
+      let true_j;
+      let true_k;
+
+      for (let j = 0; j < ribeyeDirList.length; j++) {   
+        let ribeyeName = ribeyeDirList[j][1].slice(ribeyeDirList[j][1].lastIndexOf("/")+1, -4);
+        if (crossName == ribeyeName) {
+          true_j = j
+          break
         }
-        console.log("右クリック　mousedown");
+      }
 
-        let x = event.layerX;
-        let y = event.layerY;
+      for (let k = 0; previewDirList.length; k++) {
+        let previewName = previewDirList[k][1].slice(previewDirList[k][1].lastIndexOf("/")+1, -4);
+        if (crossName == previewName) {
+          true_k = k
+          break
+        }
+      }
 
-        context.beginPath();
-        ribeyeContext.beginPath();
-        isDrag = true;
-        isStartInsideMask = isInsideMask(x, y);
-
-        startPosition.x = x;
-        startPosition.y = y;
+      loadedPathAndImgList.push([crossDirList[i], ribeyeDirList[true_j], previewDirList[true_k]]);
     }
 
-    function dragEnd(event) {
-        // 左クリックのmousedownの場合returnさせる
-        event = event || window.event; // IE対応
-        if (event.button == 0) {
-        console.log("左クリック　mouseup");
-        return
-        }
-        console.log("右クリック　mouseup");
-        
-        if (!isDrag) {
-        return;
-        }
+  }
 
-        let x = event.layerX;
-        let y = event.layerY;
+  // デフォルトでは名前降順のfileData, relativePathを、[cross, ribeye, preview], []... の名前昇順のリスト構造に整え
+  // canvasにその一枚目を表示、画像遷移ボタンを有効にする。
+  function loadFileDatas(e) {
+    createSortedPathAndImgList(e);
+    setImages(loadedPathAndImgList[0]);
+    imgForwardButton.disabled = false;
+    isLoadedImage = true
+    isAbleToUpload = checkAbleToUpload();
+  }
 
-        context.closePath();
-        ribeyeContext.closePath();
-        isEndInsideMask = isInsideMask(x, y);
+  function convertArray(data) {
+    const dataArray = [];
+    const dataString = data.split('\n');
+    // 一行目はタイトルだから飛ばす
+    for (let i = 0; i < dataString.length-1; i++) {
+      if (dataString[i+1] == "") {
+        continue
+      }
 
-        endPosition.x = x;
-        endPosition.y = y;
-
-        let isAddArea = isInsideMask(startPosition.x, startPosition.y) && isInsideMask(endPosition.x, endPosition.y);
-        let isClipArea =  !isInsideMask(startPosition.x, startPosition.y) && !isInsideMask(endPosition.x, endPosition.y);
-        // 内→外もしくは外→内　になった時のみpreCanvesを動作させる。
-        if (!(isAddArea || isClipArea) || (isClipArea && !(isCrossedMask))) {
-        prevCanvas();
-        } else {
-        changeBoundary();
-        saveToLocalStoreage();
-        }
-
-        // 描画中に記録していた値をリセットする
-        nowPosition.x = null;
-        nowPosition.y = null;
-
-        isDrag = false;
-        isCrossedMask = false;
+      dataArray[i] = dataString[i+1].split(',');
     }
 
-    function downloadImg() {
-        let imagedata = context.getImageData(0, 0, canvasWidth, canvasHeight); 
-        let BMPWriter = new TBMPWriter(imagedata);
-        // path = 20210817-153843_Irongate/cross_section/20210815232725_0199333837010053310201982011210813211026212128.jpg
-        // name = 20210815232725_0199333837010053310201982011210813211026212128.jpg
-        // filename = 20210815232725_0199333837010053310201982011210813211026212128
-        let path =  loadedPathAndImgList[imgCount][0][1];
-        let name = path.split("/")[2];
-        let filename = name.substr(0, name.length-4);
-    
-        BMPWriter.SaveToFile(filename + ".bmp");
+    return dataArray;
+  }
 
-        if (imgCount < loadedPathAndImgList.length - 1) {
-        console.log("imgfoward")
-        imgForward();
-        }
+  function loadCsv(e) {
+    let fileReader = new FileReader();
+    fileReader.readAsText(e.target.files[0])
+
+    fileReader.onload = () => {
+      let result = fileReader.result;
+      csvData = convertArray(result);
+      isAbleToUpload = checkAbleToUpload();
     }
+  }
 
-    function draw(event) {
-        let x = event.layerX;
-        let y = event.layerY;
-
-        if (isLoadedImage && isDrag && !isCrossedMask) {
-        isCrossedMask = (isStartInsideMask && !isInsideMask(x, y)) || (!isStartInsideMask && isInsideMask(x, y));
-        }
-    
-        context.lineCap = 'round';
-        context.lineJoin = 'round';
-        context.lineWidth = 5;
-        ribeyeContext.lineCap = 'round';
-        ribeyeContext.lineJoin = 'round';
-        ribeyeContext.lineWidth = 5;
-
-        if (isStartInsideMask) {
-        context.strokeStyle = "rgb(0, 255, 0)";
-        ribeyeContext.strokeStyle = "rgb(0, 255, 0)";
-        } else {
-        context.strokeStyle = "rgb(255, 0 , 0)";
-        ribeyeContext.strokeStyle = "rgb(0, 0 , 0)";
-        }
-        boundaryChangeDraw(x, y);
+  function checkAbleToUpload() {
+    let csvDataCheck = (csvData.length != 0);
+    let imgDataCheck = (loadedPathAndImgList.length != 0);
+    let lengthCheck = (csvData.length == loadedPathAndImgList.length);
+    if (csvDataCheck && imgDataCheck && lengthCheck) {
+      return true;
+    } else if (csvDataCheck && imgDataCheck && !lengthCheck) {
+      alert("画像データとcsvデータの数が一致しません。\n自動アップロード機能はオフになりました。");
+      return false;
+    } else {
+      return false;
     }
+  }
 
-    function addEventListenerToCanvas(canvas) {
-        canvas.addEventListener('mousedown', dragStart);
-        canvas.addEventListener('mouseup', dragEnd);
-        canvas.addEventListener('mousemove', draw);
-        canvas.addEventListener('touchstart', dragStart);
-        canvas.addEventListener('touchend', dragEnd);
-        canvas.addEventListener('touchmove', draw);
-        // canvas.addEventListener('mouseout', dragEnd); // TODO: 余分に出力されている。直す必要があるかどうか検討
+  initEventHandler();
+  fileInput.addEventListener('change', loadFileDatas, false);
+  // csvInput.addEventListener('change', loadCsv, false)
+});
 
-    }
-
-    function initEventHandler() {
-        // clearButton.addEventListener('click', clearExceptImg);
-        // imgForwardButton.addEventListener('click', imgForward);
-        // imgBackwardButton.addEventListener('click', imgBackward);
-        // downloadButton.addEventListener('click', downloadImg);
-        clearButton.addEventListener('contextmenu', clearExceptImg);
-        imgForwardButton.addEventListener('contextmenu', imgForward);
-        imgBackwardButton.addEventListener('contextmenu', imgBackward);
-        downloadButton.addEventListener('contextmenu', downloadImg);
-        addEventListenerToCanvas(canvas);
-        addEventListenerToCanvas(ribeyeCanvas);
-    }
-
-    function createSortedPathAndImgList(e) {
-        let crossDirList = [];
-        let ribeyeDirList = [];
-        let previewDirList = [];
-        for (let i = 0; i < e.target.files.length; i++) {
-        let fileData = e.target.files[i];
-
-        // 画像ファイル以外は処理をしない
-        if(!fileData.type.match('image.*')) {
-            continue
-        }
-
-        // ディレクトリの相対パス(絶対パスはセキュリティ上取得できない)
-        let relativePath = fileData.webkitRelativePath;
-
-        if (relativePath.indexOf("cross_section") != -1) {
-            crossDirList.push([fileData,relativePath]);
-        } else if (relativePath.indexOf("ribeye_mask") != -1) {
-            ribeyeDirList.push([fileData,relativePath]);
-        } else if (relativePath.indexOf("preview") != -1) {
-            previewDirList.push([fileData,relativePath]);
-        }
-        }
-
-        // 枚数が全て一致しない場合処理しない
-        if (!(crossDirList.length == ribeyeDirList.length && ribeyeDirList.length == previewDirList.length)) {
-        // TODO: どの写真が余っているのか、不足しているのかアラートで知らせる
-        alert('cross_section, ribeye_mask, preview の写真枚数が一致しません');
-        return;
-        }
-
-        console.log("start")
-
-        
-        for (let i = 0; i < crossDirList.length; i++) {
-        let crossName = crossDirList[i][1].slice(crossDirList[i][1].lastIndexOf("/")+1, -4);
-        let true_j;
-        let true_k;
-
-        for (let j = 0; j < ribeyeDirList.length; j++) {   
-            let ribeyeName = ribeyeDirList[j][1].slice(ribeyeDirList[j][1].lastIndexOf("/")+1, -4);
-            if (crossName == ribeyeName) {
-            true_j = j
-            break
-            }
-        }
-
-        for (let k = 0; previewDirList.length; k++) {
-            let previewName = previewDirList[k][1].slice(previewDirList[k][1].lastIndexOf("/")+1, -4);
-            if (crossName == previewName) {
-            true_k = k
-            break
-            }
-        }
-
-        loadedPathAndImgList.push([crossDirList[i], ribeyeDirList[true_j], previewDirList[true_k]]);
-        }
-
-    }
-
-    // デフォルトでは名前降順のfileData, relativePathを、[cross, ribeye, preview], []... の名前昇順のリスト構造に整え
-    // canvasにその一枚目を表示、画像遷移ボタンを有効にする。
-    function loadFileDatas(e) {
-        createSortedPathAndImgList(e);
-        setImages(loadedPathAndImgList[0]);
-        imgForwardButton.disabled = false;
-        isLoadedImage = true
-    }
-
-    initEventHandler();
-    fileInput.addEventListener('change', loadFileDatas, false);
-    });
-
-    // 右クリックのメニューが出ないようにする
-    document.oncontextmenu = function () {
-    return false;
-    }
-    </script>
-
-    <script type="text/javascript">
-        /**************************************************/
-        /*                                                */
-        /*     BMP.js                                     */
-        /*                                      v0.88     */
-        /*                                                */
-        /*     Copyright 2016 Takeshi Okamoto (Japan)     */
-        /*                                                */
-        /*     Released under the MIT license             */
-        /*     https://github.com/TakeshiOkamoto/         */
-        /*                                                */
-        /*                            Date: 2016-12-16    */
-        /**************************************************/
-
-        ////////////////////////////////////////////////////////////////////////////////
-        // Generic Class
-        ////////////////////////////////////////////////////////////////////////////////
-
-        // ---------------------
-        //  TFileStream            
-        // ---------------------
-        function TFileStream(BufferSize) {
-
-        if (BufferSize == undefined)
-            this.MemorySize = 5000000; // 5M
-        else
-            this.MemorySize = parseInt(BufferSize, 10);
-
-        this.Size = 0;
-        this.Stream = new Uint8Array(this.MemorySize);
-        }
-
-        // ---------------------
-        //  TFileStream.Method     
-        // ---------------------
-        TFileStream.prototype = {
-
-        _AsciiToUint8Array: function (S) {
-            var len = S.length;
-            var P = new Uint8Array(len);
-            for (var i = 0; i < len; i++) {
-                P[i] = S[i].charCodeAt(0);
-            }
-            return P;
-        },
-
-        WriteByte: function (value) {
-            var P = new Uint8Array(1);
-            
-            P[0] = value;
-            
-            this.WriteStream(P);      
-        },
-
-        WriteWord: function (value) {
-            var P = new Uint8Array(2);
-            
-            P[1] = (value & 0xFF00) >> 8;
-            P[0] = (value & 0x00FF);  
-            
-            this.WriteStream(P);      
-        },
-
-        WriteDWord: function (value) {
-            var P = new Uint8Array(4);
-            
-            P[3] = (value & 0xFF000000) >> 24;
-            P[2] = (value & 0x00FF0000) >> 16;
-            P[1] = (value & 0x0000FF00) >> 8;
-            P[0] = (value & 0x000000FF);  
-            
-            this.WriteStream(P);      
-        },
-
-        WriteWord_Big: function (value) {
-            var P = new Uint8Array(2);
-            
-            P[1] = (value & 0x00FF);
-            P[0] = (value & 0xFF00) >> 8;  
-            
-            this.WriteStream(P);      
-        },        
-
-        WriteDWord_Big: function (value) {
-            var P = new Uint8Array(4);
-            
-            P[3] = (value & 0x000000FF) 
-            P[2] = (value & 0x0000FF00) >> 8;
-            P[1] = (value & 0x00FF0000) >> 16;
-            P[0] = (value & 0xFF000000) >> 24;;  
-            
-            this.WriteStream(P);      
-        },
-            
-        WriteString: function (S) {
-            var P = this._AsciiToUint8Array(S);
-
-            // メモリの再編成
-            if (this.Stream.length <= (this.Size + P.length)) {
-                var B = new Uint8Array(this.Stream);
-                this.Stream = new Uint8Array(this.Size + P.length + this.MemorySize);
-                this.Stream.set(B.subarray(0, B.length));
-            }
-
-            this.Stream.set(P, this.Size);
-            this.Size = this.Size + P.length;
-        },
-
-        WriteStream: function (AStream) {      
-            
-            // メモリの再編成
-            if (this.Stream.length <= (this.Size + AStream.length)) {
-                var B = new Uint8Array(this.Stream);
-                this.Stream = new Uint8Array(this.Size + AStream.length + this.MemorySize);
-                this.Stream.set(B.subarray(0, B.length));
-            }
-
-            this.Stream.set(AStream, this.Size);
-            this.Size = this.Size + AStream.length;
-        },
-
-        getFileSize: function () {
-            return this.Size;
-        },
-
-        SaveToFile: function (FileName,type) {
-            if (window.navigator.msSaveBlob) {
-                window.navigator.msSaveBlob(new Blob([this.Stream.subarray(0, this.Size)], { type: type }), FileName);
-            } else {
-                var a = document.createElement("a");
-                a.href = URL.createObjectURL(new Blob([this.Stream.subarray(0, this.Size)], { type: type }));
-                //a.target   = '_blank';
-                a.download = FileName;
-                document.body.appendChild(a); //  FF specification
-                a.click();
-                document.body.removeChild(a); //  FF specification
-            }
-        },
-        }
-
-        // ---------------------
-        //  TBMPWriter        
-        // ---------------------
-        function TBMPWriter(imagedata) {
-        this.raw    = imagedata.data;
-        this.width  = imagedata.width;
-        this.height = imagedata.height;  
-
-        // カラーパレットの生成
-        this._getColorPalette();
-        }
-
-        TBMPWriter.prototype = {
-            
-        // 4の倍数に対応した横幅のバイト数を取得する
-        GetBitmapWidth: function(BitCount,Width){
-        var result = 0;
-
-        switch (BitCount){
-            case 1  : result = Math.floor((Width + 7) / 8); break;
-            case 4  : result = Math.floor((Width + 7) / 8) << 2; break;
-            case 8  : result = Width; break;
-            case 16 : result = Math.floor((Width * 16 + 31) / 32) * 4; break; 
-            case 24 : result = Math.floor((Width * 24 + 31) / 32) * 4; break;
-            case 32 : result = Math.floor((Width * 32 + 31) / 32) * 4; break;         
-        }
-        
-        if (BitCount == 1 || BitCount == 4 || BitCount == 8){
-            if ((result & 3) != 0)  result = (result | 3) + 1;
-        }
-
-        return result;
-        },
-
-        // 画像からパレットの生成
-        _getColorPalette: function () {
-            var height = this.height;
-            var width  = this.width;
-            var raw    = this.raw;
-            
-            // 使用している色数の取得
-            var cnt = 0;
-            var uses_colors = new Object;
-            
-            for(var i = 0; i< height;i++){
-                for(var j = 0; j< width;j++){
-                    var key = raw[cnt]   + ',' + 
-                            raw[cnt+1] + ',' + 
-                            raw[cnt+2] ;
-                        uses_colors[key] = 1;        
-                    cnt = cnt + 4;
-                }
-            }
-            
-            var cnt = 0;
-            for (var key in uses_colors) { cnt++; }
-            
-            // 24bit
-            if (cnt > 256){
-            
-            this.palette = null;
-            this.uses_colors = null;
-            this.color_depth = 24;
-            
-            // 2/16/256色(1/4/8bit)   
-            }else{        
-            
-            // 配列の設定
-            var rgb,cnt = 0;
-            var palette = new Array();   
-            for (var key in uses_colors) {
-                rgb = key.split(",");
-                
-                // 連想配列を配列へ変換
-                palette[cnt] = {'r':parseInt(rgb[0],10),
-                                'g':parseInt(rgb[1],10),
-                                'b':parseInt(rgb[2],10)};
-                                        
-                // 連想配列へカラー番号を設定(高速化用)                         
-                uses_colors[key] = cnt;
-                    
-                cnt++;                     
-            }
-            
-            // ビット深度の設定         
-            var len = palette.length;
-            if(len >= 0 && len <=2){
-                this.color_depth = 1;
-            }else if(len >= 3 && len <=16){
-                this.color_depth = 4;
-            }else if(len >= 17 && len <=256){
-                this.color_depth = 8;            
-            }
-            
-            this.palette = palette;
-            this.uses_colors = uses_colors;
-            }                
-        },
-
-        // イメージデータの書き込み
-        _WriteImageData: function (Stream,XorSize) {
-            var onebyte  = 0;  // 1byte用
-            var p_cnt    = 0;  // ストリームのカウンタ
-            var img_cnt  = 0;  // イメージのカウンタ
-            var line_cnt = 0;  // 一行のカウンタ
-            
-            var width  = this.width;
-            var height = this.height;
-            var raw    = this.raw;
-            var color_depth = this.color_depth;  
-            var uses_colors = this.uses_colors;      
-            
-            // 一行の実際の横幅(パディング含む)
-            var LineWidth = this.GetBitmapWidth(color_depth,width);
-                    
-            P = new Uint8Array(XorSize);
-            
-            // ゼロクリア
-            for (var j = 0; j < P.length; j++) { P[j] = 0; }    
-
-            // *** 1bit
-            if(color_depth == 1){            
-                
-                for (var i = 0; i < height; i++) {               
-                    line_cnt = 0; 
-                    for (var j = 0; j < LineWidth; j++) {
-                    
-                    // 実際の幅を超えたらパディング
-                    if (line_cnt >= width){
-                        
-                        P[p_cnt++] = 0;  
-                    
-                    // 1つのピクセルデータを1bitで設定する   
-                    }else{                
-                        if (line_cnt < width){                      
-                        onebyte  = uses_colors[raw[img_cnt]   + ',' +
-                                                raw[img_cnt+1] + ',' + 
-                                                raw[img_cnt+2] ] << 7;
-                        img_cnt += 4;                            
-                        line_cnt++;
-                        }
-                        
-                        if (line_cnt < width){
-                        onebyte  |= uses_colors[raw[img_cnt]   + ',' +
-                                                raw[img_cnt+1] + ',' + 
-                                                raw[img_cnt+2] ] << 6;
-                        img_cnt += 4;                            
-                        line_cnt++;
-                        }
-                        
-                        if (line_cnt < width){
-                        onebyte  |= uses_colors[raw[img_cnt]   + ',' +
-                                                raw[img_cnt+1] + ',' + 
-                                                raw[img_cnt+2] ] << 5;
-                        img_cnt += 4;                            
-                        line_cnt++;
-                        }
-                        
-                        if (line_cnt < width){
-                        onebyte  |= uses_colors[raw[img_cnt]   + ',' +
-                                                raw[img_cnt+1] + ',' + 
-                                                raw[img_cnt+2] ] << 4;
-                        img_cnt += 4;                            
-                        line_cnt++;
-                        }
-                        
-                        if (line_cnt < width){
-                        onebyte  |= uses_colors[raw[img_cnt]   + ',' +
-                                                raw[img_cnt+1] + ',' + 
-                                                raw[img_cnt+2] ] << 3;
-                        img_cnt += 4;                            
-                        line_cnt++;
-                        }
-
-                        if (line_cnt < width){
-                        onebyte  |= uses_colors[raw[img_cnt]   + ',' +
-                                                raw[img_cnt+1] + ',' + 
-                                                raw[img_cnt+2] ] << 2;
-                        img_cnt += 4;                            
-                        line_cnt++;
-                        } 
-                        
-                        if (line_cnt < width){
-                        onebyte  |= uses_colors[raw[img_cnt]   + ',' +
-                                                raw[img_cnt+1] + ',' + 
-                                                raw[img_cnt+2] ] << 1;
-                        img_cnt += 4;                            
-                        line_cnt++;
-                        }  
-                        
-                        if (line_cnt < width){
-                        onebyte  |= uses_colors[raw[img_cnt]   + ',' +
-                                                raw[img_cnt+1] + ',' + 
-                                                raw[img_cnt+2] ];
-                        img_cnt += 4;                            
-                        line_cnt++;
-                        }     
-                                                                                                            
-                        P[p_cnt++] = onebyte;
-                        
-                    }
-                    onebyte = 0;
-                    }
-                }   
-
-            // *** 4bit       
-            }else if(color_depth == 4){
-                var onebyte = 0;
-                
-                for (var i = 0; i < height; i++) {               
-                    line_cnt = 0; 
-                    for (var j = 0; j < LineWidth; j++) {
-                    
-                    // 実際の幅を超えたらパディング
-                    if (line_cnt >= width){
-                        P[p_cnt++] = 0;  
-                                            
-                    // 1つのピクセルデータを4bitで設定する   
-                    }else{                
-                        if (line_cnt < width){
-                            onebyte  = uses_colors[raw[img_cnt]   + ',' +
-                                                raw[img_cnt+1] + ',' + 
-                                                raw[img_cnt+2] ] << 4;
-                        img_cnt += 4;                            
-                        line_cnt++;
-                        }
-                        
-                        if (line_cnt < width){
-                            onebyte  |= uses_colors[raw[img_cnt]   + ',' +
-                                                    raw[img_cnt+1] + ',' + 
-                                                    raw[img_cnt+2] ];
-                        img_cnt += 4;                            
-                        line_cnt++;
-                        }     
-                                                                                                            
-                        P[p_cnt++] = onebyte;
-                        
-                    }
-                    onebyte = 0;
-                    }
-                }               
-            
-            // *** 8bit       
-            }else if(color_depth == 8){  
-            
-                for (var i = 0; i < height; i++) { 
-                    line_cnt =0;   
-                    for (var j = 0; j < width; j++) {
-                    P[p_cnt++] = uses_colors[raw[img_cnt]   + ',' +
-                                                raw[img_cnt+1] + ',' + 
-                                                raw[img_cnt+2] ];
-                    img_cnt += 4;                                                   
-                    line_cnt++;
-                    }
-                    // パディング
-                    while (true){
-                    if (line_cnt == LineWidth) break;
-                    p_cnt++;
-                    line_cnt++;
-                    } 
-                } 
-
-            // *** 24bit       
-            }else if(color_depth == 24){
-            
-                for (var i = 0; i < height; i++) { 
-                    line_cnt =0;   
-                    for (var j = 0; j < width; j++) {
-                    P[p_cnt++] = raw[img_cnt+2];
-                    P[p_cnt++] = raw[img_cnt+1];
-                    P[p_cnt++] = raw[img_cnt];
-                    
-                    img_cnt += 4;  
-                    line_cnt += 3;
-                    }
-                    // パディング
-                    while (true){
-                    if (line_cnt == LineWidth) break;
-                    p_cnt++;
-                    line_cnt++;
-                    } 
-                } 
-            }      
-            
-            // イメージを反転
-            var cnt = 0;
-            var B = new Uint8Array(P.length);
-            for (var i = height -1; i >=0 ; i--) {
-                for (var j = 0; j < LineWidth; j++) {
-                    B[cnt++] = P[(LineWidth*i)+ j]; 
-                }
-            }
-                
-            Stream.WriteStream(B);      
-        },
-                
-        SaveToStream: function () {
-            var F = new TFileStream();
-            
-            // ピクセルデータの計算
-            var XorSize = Math.floor((this.color_depth * this.width + 31) / 32) * 4 * Math.abs(this.height);
-            
-            // パレットデータの計算(1つの色はBGRAの4バイト)
-            var PaletteSize = 0;
-            if (this.color_depth != 24){
-            PaletteSize = Math.pow(2,this.color_depth) *4;
-            }
-                
-            // -------------------------
-            //  BitmapFileHeader(14byte)
-            // -------------------------
-            
-            // 0x424D(BM)
-            F.WriteByte(0x42);
-            F.WriteByte(0x4D);
-            
-            // ファイルサイズ
-            F.WriteDWord(14 + 40 + PaletteSize + XorSize);
-            // 予約1
-            F.WriteWord(0);
-            // 予約2
-            F.WriteWord(0);
-            // 画像データ(XOR)までのバイト数
-            F.WriteDWord(14 + 40 + PaletteSize);
-
-            // -------------------------
-            //  BitmapInfoHeader(40byte)
-            // -------------------------
-                
-            // 構造体のサイズ
-            F.WriteDWord(40);        
-            // 幅
-            F.WriteDWord(this.width);        
-            // 高さ
-            F.WriteDWord(this.height);        
-            // 常に1
-            F.WriteWord(1);        
-            // カラービット数(0,1,4,8,16,24,32)
-            F.WriteWord(this.color_depth);        
-            // 圧縮形式 非圧縮:0 
-            F.WriteDWord(0);        
-            // イメージのサイズ(Xor) 
-            F.WriteDWord(XorSize);        
-            // 水平解像度
-            F.WriteDWord(0);        
-            // 垂直解像度
-            F.WriteDWord(0);        
-            // 実際に使用されているカラーテーブルのエントリ数
-            F.WriteDWord(0);
-            // 重要なカラーテーブル数
-            F.WriteDWord(0);
-            
-            // ----------------------
-            //  カラーパレット
-            // ----------------------            
-            if (this.color_depth != 24){
-            for (var i = 0; i < this.palette.length; i++) {
-                F.WriteByte(this.palette[i].b);
-                F.WriteByte(this.palette[i].g);
-                F.WriteByte(this.palette[i].r);
-                F.WriteByte(0);            
-            }  
-            
-            // 不足分のパレット
-            for (var i = this.palette.length ; i < Math.pow(2,this.color_depth); i++) {
-                F.WriteByte(0);
-                F.WriteByte(0);
-                F.WriteByte(0);
-                F.WriteByte(0);            
-            }              
-            }       
-
-            // ----------------------
-            //  Xor
-            // ----------------------
-            this._WriteImageData(F,XorSize);           
-            
-            return F;              
-        },    
-
-        // BMPファイルの生成     
-        // FileName : ファイル名
-        SaveToFile: function (FileName) {
-        var F = this.SaveToStream();
-
-        // ファイルをダウンロード             
-        F.SaveToFile(FileName,"image/bmp");   
-        }       
-        }  
-
-    </script>
+// 右クリックのメニューが出ないようにする
+document.oncontextmenu = function () {
+  return false;
+}
+</script>
 </body>
 </html>

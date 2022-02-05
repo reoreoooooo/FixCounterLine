@@ -523,6 +523,6 @@ TBMPWriter.prototype = {
       var F = this.SaveToStream();
     
       // ファイルをダウンロード             
-      F.SaveToFile(FileName,"image/bmp");   
+      F.SaveToFile(FileName,"image/png");   
     }       
 }  

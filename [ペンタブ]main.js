@@ -6,6 +6,7 @@ window.addEventListener('load', () => {
   const counter = document.querySelector("#counter");
   const relativePathDiplay = document.querySelector('#relative-path');
   const fileInput = document.getElementById('file');
+  // const csvInput = document.getElementById('csv');
   let imgCount = 0;
   
   let canvasWidth = 2200;
@@ -26,7 +27,6 @@ window.addEventListener('load', () => {
   ribeyeConterCanvas.width = canvasWidth;
   ribeyeConterCanvas.height = canvasHeight;
 
-  // TODO: メモリリークの原因探索。このへんがあやしいけど。
   let oriCrossSectionImg = new Image();
   let cvOriCrossSectionImg = cv.Mat.ones(canvasHeight, canvasWidth, cv.CV_8UC3);
   let preCrossSectionImg = cv.Mat.ones(canvasHeight, canvasWidth, cv.CV_8UC3);
@@ -34,11 +34,14 @@ window.addEventListener('load', () => {
   let oriRibeyeImg = new Image();
 
   let loadedPathAndImgList = [];
+  let csvData = [];
+  // [0]: Owner, [1]: TakenAt, [2]: BarcodeNo, [3]: BodyNo
 
   let isStartInsideMask = false;
   let isEndInsideMask = false;
   let isCrossedMask = false;
   let isChangedContour = false;
+  let isAbleToUpload = false;
 
   // 始点、終点、現在点のマウスのcanvas上のxy座標
   const startPosition = {x: null, y: null};
@@ -222,9 +225,11 @@ window.addEventListener('load', () => {
   // 「context.beginPath()」と「context.closePath()」を都度draw関数内で実行するよりも、
   // 線の描き始め(dragStart関数)と線の描き終わり(dragEnd)で1回ずつ読んだほうがより綺麗に線画書ける
   function dragStart(event) {
-    // 左クリックのmousedownの場合returnさせる
-    event = event || window.event; // IE対応
+    // 右クリックのmousedownの場合returnさせる
+    event = event || window.event;
+
     if (event.button == 0) {
+      // 左クリック event.button == 0, 右クリック event.button == 2
       console.log("左クリック　mousedown");
       return
     }
@@ -244,12 +249,13 @@ window.addEventListener('load', () => {
 
   function dragEnd(event) {
     // 左クリックのmousedownの場合returnさせる
+    // 左クリックのmousedownの場合returnさせる
     event = event || window.event; // IE対応
-    if (event.button == 0) {
-      console.log("左クリック　mouseup");
+    if (event.button == 2) {
+      console.log("右クリック　mouseup");
       return
     }
-    console.log("右クリック　mouseup");
+    console.log("左クリック　mouseup");
     
     if (!isDrag) {
       return;
@@ -283,9 +289,62 @@ window.addEventListener('load', () => {
     isCrossedMask = false;
   }
 
+  function saveToFile(FileName, imgData) {
+    var a = document.createElement("a");
+    a.href = imgData
+    //a.target   = '_blank';
+    a.download = FileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+  // function uploadImg(imgData, coresCsvData) {
+  //   const url = "https://mds.meatimage.jp/api/beef/image/__auto__/input.jpg?";
+  //   const token = "36a55dc836176b49562c0f3a4b0d2f20709af9b9";
+
+  //   let params = {
+  //     method: "PUT",
+  //     headers: {
+  //       "Content-Type" : "image/png",
+  //       "Authorization": `Token ${token}`
+  //     },
+  //     body: imgData
+  //   }
+
+  //   // [0]: Owner, [1]: TakenAt, [2]: BarcodeNo, [3]: BodyNo
+  //   let barcode = coresCsvData[2];
+  //   let bodyno = coresCsvData[3];
+  //   let takenat = coresCsvData[1];
+  //   let owner = coresCsvData[0];
+
+  //   let p = {
+  //     "barcode_no" : barcode,
+  //     "body_no" : bodyno,
+  //     "taken_at" : "2022-01-11T23%3A50%3A00%2B09%3A00",
+  //     "owner" : "",
+  //     "do_analysis" : "True",
+  //     "ppmm" : "10"
+  //   };
+  //   let query = new URLSearchParams(p);
+    
+  //   fetch(url+`${query}`, params).then(response => {
+  //     console.log(response);
+  //   });
+  // }
+
+
+  function checkCorrespondCsvData(filename) {
+    for (let i = 0; i < csvData.length; i++) {
+      if (csvData[i][2] == filename.split("_")[1]) {
+        return csvData[i];
+      } 
+    }
+    return null;
+  }
+
   function downloadImg() {
-    let imagedata = context.getImageData(0, 0, canvasWidth, canvasHeight); 
-    let BMPWriter = new TBMPWriter(imagedata);
+    let imgData = canvas.toDataURL("image/png");
     // path = 20210817-153843_Irongate/cross_section/20210815232725_0199333837010053310201982011210813211026212128.jpg
     // name = 20210815232725_0199333837010053310201982011210813211026212128.jpg
     // filename = 20210815232725_0199333837010053310201982011210813211026212128
@@ -293,8 +352,13 @@ window.addEventListener('load', () => {
     let name = path.split("/")[2];
     let filename = name.substr(0, name.length-4);
    
-    BMPWriter.SaveToFile(filename + ".bmp");
+    saveToFile(filename, imgData);
 
+    // let coresCsvData = checkCorrespondCsvData(filename);
+    // if (coresCsvData != null && isAbleToUpload == true) {
+    //   uploadImg(imgData, coresCsvData);
+    // }
+    
     if (imgCount < loadedPathAndImgList.length - 1) {
       console.log("imgfoward")
       imgForward();
@@ -380,9 +444,6 @@ window.addEventListener('load', () => {
       alert('cross_section, ribeye_mask, preview の写真枚数が一致しません');
       return;
     }
-
-    console.log("start")
-
     
     for (let i = 0; i < crossDirList.length; i++) {
       let crossName = crossDirList[i][1].slice(crossDirList[i][1].lastIndexOf("/")+1, -4);
@@ -417,10 +478,52 @@ window.addEventListener('load', () => {
     setImages(loadedPathAndImgList[0]);
     imgForwardButton.disabled = false;
     isLoadedImage = true
+    isAbleToUpload = checkAbleToUpload();
+  }
+
+  function convertArray(data) {
+    const dataArray = [];
+    const dataString = data.split('\n');
+    // 一行目はタイトルだから飛ばす
+    for (let i = 0; i < dataString.length-1; i++) {
+      if (dataString[i+1] == "") {
+        continue
+      }
+
+      dataArray[i] = dataString[i+1].split(',');
+    }
+
+    return dataArray;
+  }
+
+  function loadCsv(e) {
+    let fileReader = new FileReader();
+    fileReader.readAsText(e.target.files[0])
+
+    fileReader.onload = () => {
+      let result = fileReader.result;
+      csvData = convertArray(result);
+      isAbleToUpload = checkAbleToUpload();
+    }
+  }
+
+  function checkAbleToUpload() {
+    let csvDataCheck = (csvData.length != 0);
+    let imgDataCheck = (loadedPathAndImgList.length != 0);
+    let lengthCheck = (csvData.length == loadedPathAndImgList.length);
+    if (csvDataCheck && imgDataCheck && lengthCheck) {
+      return true;
+    } else if (csvDataCheck && imgDataCheck && !lengthCheck) {
+      alert("画像データとcsvデータの数が一致しません。\n自動アップロード機能はオフになりました。");
+      return false;
+    } else {
+      return false;
+    }
   }
 
   initEventHandler();
   fileInput.addEventListener('change', loadFileDatas, false);
+  // csvInput.addEventListener('change', loadCsv, false)
 });
 
 // 右クリックのメニューが出ないようにする
