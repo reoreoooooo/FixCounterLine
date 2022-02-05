@@ -326,40 +326,6 @@ window.addEventListener('load', () => {
     .then(res => console.log(res.text()))
     .then(text => console.log(text))
     .catch(err =>console.log(err.message));
-
-
-
-    // const url = "https://mds.meatimage.jp/api/beef/image/__auto__/input.jpg?";
-    // const token = "36a55dc836176b49562c0f3a4b0d2f20709af9b9";
-
-    // let params = {
-    //   method: "PUT",
-    //   headers: {
-    //     "Content-Type" : "image/png",
-    //     "Authorization": `Token ${token}`
-    //   },
-    //   body: imgData
-    // }
-
-    // // [0]: Owner, [1]: TakenAt, [2]: BarcodeNo, [3]: BodyNo
-    // let barcode = coresCsvData[2];
-    // let bodyno = coresCsvData[3];
-    // let takenat = coresCsvData[1];
-    // let owner = coresCsvData[0];
-
-    // let p = {
-    //   "barcode_no" : barcode,
-    //   "body_no" : bodyno,
-    //   "taken_at" : "2022-01-11T23%3A50%3A00%2B09%3A00",
-    //   "owner" : "kuchida",
-    //   "do_analysis" : "True",
-    //   "ppmm" : "10"
-    // };
-    // let query = new URLSearchParams(p);
-    
-    // fetch(url+`${query}`, params).then(response => {
-    //   console.log(response);
-    // });
   }
 
 
