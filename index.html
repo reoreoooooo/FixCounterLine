@@ -24,8 +24,10 @@
 <div>
   <canvas
     id="preview-draw-area"
-    style="border: 1px solid #000000;">
-  </canvas>
+    style="border: 1px solid #000000;"></canvas>
+  <canvas
+    id="init-preview-area"
+    style="border: 1px solid #000000"></canvas>
 </div>
 <div>
   <button id="clear-button" style="width: 400px; height: 300px; padding: 10px; font-size: 50px;">全消し</button>
@@ -43,6 +45,7 @@
     id="ribeye-contour-area"
     style="border: 1px solid #000000;"></canvas>
 
+
   <script src="main.js"></script>
   <script src="https://docs.opencv.org/3.4.1/opencv.js"></script>
 
@@ -54,6 +57,10 @@
       display: none;
     }
     #preview-draw-area {
+      float: left;
+      display: none;
+    }
+    #init-preview-area {
       float: left;
     }
     #clear-button, #download-button, #img-backward-button, #img-forward-button, #counter {

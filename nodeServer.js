@@ -81,6 +81,10 @@ function uploadImg(imgData, coresCsvData) {
   let query = new URLSearchParams(p);
   
   fetch(url+`${query}`, params).then(response => {
-    console.log(response.statusText);
+    if (response.statusText == "OK") {
+      console.log("UPLOADED")
+    } else {
+      console.log("!!!!!!!!\nUPLOAD_ERROR\n!!!!!!!!");
+    }
   });
 }

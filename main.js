@@ -1,5 +1,5 @@
 window.addEventListener('load', () => {
-  const operatingButton = "Mouce"
+  const operatingButton = "Mouse"
   // const operatingButton = "Pentab"
 
   const clearButton = document.querySelector('#clear-button');
@@ -30,11 +30,17 @@ window.addEventListener('load', () => {
   ribeyeConterCanvas.width = canvasWidth;
   ribeyeConterCanvas.height = canvasHeight;
 
+  let initPreviewCanvas = document.querySelector('#init-preview-area');
+  let initPreviewContext = initPreviewCanvas.getContext('2d');
+  initPreviewCanvas.width = canvasWidth;
+  initPreviewCanvas.height = canvasHeight;
+
   let oriCrossSectionImg = new Image();
   let cvOriCrossSectionImg = cv.Mat.ones(canvasHeight, canvasWidth, cv.CV_8UC3);
   let preCrossSectionImg = cv.Mat.ones(canvasHeight, canvasWidth, cv.CV_8UC3);
   let preRibeyeImg = cv.Mat.ones(canvasHeight, canvasWidth, cv.CV_8UC3);
   let oriRibeyeImg = new Image();
+  let oriPreviewImg = new Image();
 
   let loadedPathAndImgList = [];
   let csvData = [];
@@ -94,6 +100,7 @@ window.addEventListener('load', () => {
   }
 
   function clearExceptImg() {
+    MODEChangeToInit();
     context.clearRect(0, 0, canvasWidth, canvasHeight);
     context.drawImage(oriCrossSectionImg, 0, 0, canvasWidth, canvasHeight);
     ribeyeContext.clearRect(0, 0, canvasWidth, canvasHeight);
@@ -103,6 +110,7 @@ window.addEventListener('load', () => {
   }
 
   function imgForward() {
+    MODEChangeToInit();
     imgCount++;
     imgForwardButton.disabled = true;
     imgBackwardButton.disabled = true;
@@ -111,6 +119,7 @@ window.addEventListener('load', () => {
   }
 
   function imgBackward() {
+    MODEChangeToInit();
     imgCount--;
     imgForwardButton.disabled = true;
     imgBackwardButton.disabled = true;
@@ -131,40 +140,63 @@ window.addEventListener('load', () => {
     }
   }
 
+  function arrangeCanvasSize(width, height) {
+    canvasWidth = width;
+    canvasHeight = height;
+    canvas.width = width;
+    canvas.height = height;
+    ribeyeCanvas.width = width;
+    ribeyeCanvas.height = height;
+    initPreviewCanvas.width = width;
+    initPreviewCanvas.height = height;
+  }
+
+  // Preview => Ribeye => CrossSection の順で読み込む
+  // onloadの特性上、入れ子構造にしてしまっているので注意
+  // setTimeoutがsetImagesの最終実行地点
   function setImages(dataAndPaths) {
+    let reader = new FileReader;
+
+    reader.readAsDataURL(dataAndPaths[2][0]);
+    reader.onload = function() {
+      oriPreviewImg.src = reader.result;
+      oriPreviewImg.onload = function() {
+        arrangeCanvasSize(this.width, this.height);
+        // canvas内の要素をクリアして、画像を描画。imagedataを取得
+        initPreviewContext.clearRect(0, 0, canvasWidth, canvasHeight);
+        initPreviewContext.drawImage(oriPreviewImg, 0, 0, canvasWidth, canvasHeight)
+        setRibeyeImage(dataAndPaths);
+      }
+    }
+  }
+
+  function setRibeyeImage(dataAndPaths) {
     let reader = new FileReader;
       
     reader.readAsDataURL(dataAndPaths[1][0]);
     reader.onload = function() {
       oriRibeyeImg.src = reader.result;
       oriRibeyeImg.onload =  function() {
-        // タイミング的にちょっと危ないけど、個々がcanvasWidth, height を取得できる最速タイミング
-        canvasWidth = this.width;
-        canvasHeight =this.height;
-        canvas.width = canvasWidth;
-        canvas.height = canvasHeight;
-        ribeyeCanvas.width = canvasWidth;
-        ribeyeCanvas.height = canvasHeight;
         // canvas内の要素をクリアして、画像を描画。imagedataを取得
         ribeyeContext.clearRect(0, 0, canvasWidth, canvasHeight);
         ribeyeContext.drawImage(oriRibeyeImg, 0, 0, canvasWidth, canvasHeight)
-        setCrossSectionImage(dataAndPaths[0]);
+        setCrossSectionImage(dataAndPaths);
         counter.textContent = String(imgCount + 1) + "/" + String(loadedPathAndImgList.length) 
       };
     };
   }
 
-  function setCrossSectionImage(dataAndPath) {
+  function setCrossSectionImage(dataAndPaths) {
     let reader = new FileReader();
 
-    reader.readAsDataURL(dataAndPath[0]);
+    reader.readAsDataURL(dataAndPaths[0][0]);
     reader.onload =  function() {
       oriCrossSectionImg.src = reader.result;
       oriCrossSectionImg.onload = function() {
         // canvas内の要素をクリアして、画像を描画。imagedataを取得
         context.clearRect(0, 0, canvasWidth, canvasHeight);
         context.drawImage(oriCrossSectionImg, 0, 0, canvasWidth, canvasHeight);
-        relativePathDiplay.textContent = dataAndPath[1];
+        relativePathDiplay.textContent = dataAndPaths[0][1];
         cvOriCrossSectionImg.delete();
         cvOriCrossSectionImg = cv.imread("preview-draw-area");
         changeBoundary()
@@ -224,6 +256,16 @@ window.addEventListener('load', () => {
     maskResult.delete();
     contours.delete();
   }
+
+  function MODEChangeToEdit() {
+    initPreviewCanvas.style.display = "none";
+    canvas.style.display = "block";
+  }
+
+  function MODEChangeToInit() {
+    initPreviewCanvas.style.display = "block";
+    canvas.style.display = "none";
+  }
   
   // 「context.beginPath()」と「context.closePath()」を都度draw関数内で実行するよりも、
   // 線の描き始め(dragStart関数)と線の描き終わり(dragEnd)で1回ずつ読んだほうがより綺麗に線画書ける
@@ -231,7 +273,7 @@ window.addEventListener('load', () => {
   // 左クリック event.button == 0, 右クリック event.button == 2
   function dragStart(event) {
     event = event || window.event;
-    if (operatingButton == "Mouce") {
+    if (operatingButton == "Mouse") {
       if (event.button == 2) {
         console.log("右クリック　mousedown");
         return
@@ -244,10 +286,9 @@ window.addEventListener('load', () => {
       }
       console.log("右クリック　mousedown");
     }
-    
 
-    let x = event.layerX;
-    let y = event.layerY;
+    let x = event.pageX - canvas.offsetLeft;
+    let y = event.pageY - canvas.offsetTop;
 
     context.beginPath();
     ribeyeContext.beginPath();
@@ -256,12 +297,13 @@ window.addEventListener('load', () => {
 
     startPosition.x = x;
     startPosition.y = y;
+    MODEChangeToEdit();
   }
 
   function dragEnd(event) {
     // 左クリックのmousedownの場合returnさせる
     event = event || window.event;
-    if (operatingButton == "Mouce") {
+    if (operatingButton == "Mouse") {
       if (event.button == 2) {
         console.log("右クリック　mousedown");
         return
@@ -279,8 +321,8 @@ window.addEventListener('load', () => {
       return;
     }
 
-    let x = event.layerX;
-    let y = event.layerY;
+    let x = event.pageX - canvas.offsetLeft;
+    let y = event.pageY - canvas.offsetTop;
 
     context.closePath();
     ribeyeContext.closePath();
@@ -307,11 +349,11 @@ window.addEventListener('load', () => {
     isCrossedMask = false;
   }
 
-  function saveToFile(FileName, imgData) {
+  function saveToFile(fileName, imgData) {
     var a = document.createElement("a");
     a.href = imgData
     //a.target   = '_blank';
-    a.download = FileName;
+    a.download = fileName;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -329,12 +371,39 @@ window.addEventListener('load', () => {
   }
 
 
-  function checkCorrespondCsvData(filename) {
+  function csvTakenAtToFilenameTakenAt(csvTakenAt) {
+    // csvTakenAt 2022-02-07 05:43:12+09:00 -> +09:00は無視すると日本時間になる
+    // filenameTakenAt 20210815232725 -> これは日本時間
+
+    let dt = new Date(csvTakenAt);
+
+    // DateをYYYYMMDDHHMMSSの書式で返す
+    let y = dt.getFullYear();
+    let mon = ('00' + (dt.getMonth()+1)).slice(-2);
+    let d = ('00' + dt.getDate()).slice(-2);
+    let h = ('00' + dt.getHours()).slice(-2);
+    let mi = ('00' + dt.getMinutes()).slice(-2);
+    let s = ('00' + dt.getSeconds()).slice(-2);
+
+    return (y + mon + d + h + mi + s);
+  }
+
+
+  function checkCorrespondCsvData(path, filename) {
     for (let i = 0; i < csvData.length; i++) {
-      if (csvData[i][2] == filename.split("_")[1]) {
-        return csvData[i];
+      let isTakenAtCorrect = (csvTakenAtToFilenameTakenAt(csvData[i][1]) == filename.split("_")[0]);
+      let isBarcodeCorrect = (csvData[i][2] == filename.split("_")[1]);
+      if (isTakenAtCorrect && isBarcodeCorrect) {
+        coresTakenat = csvData[i][1];
+        coresBodynum = csvData[i][3];
+        coresOwner = csvData[i][0];
+
+        barcode = filename.split("_")[1];
+
+        return [coresOwner, coresTakenat, barcode, coresBodynum];
       } 
     }
+
     return null;
   }
 
@@ -347,9 +416,10 @@ window.addEventListener('load', () => {
     let name = path.split("/")[2];
     let filename = name.substr(0, name.length-4);
    
-    saveToFile(filename, imgData);
+    saveToFile(filename+".png", imgData);
 
-    let coresCsvData = checkCorrespondCsvData(filename);
+    // これをパスにする
+    let coresCsvData = checkCorrespondCsvData(path, filename);
     if (coresCsvData != null && isAbleToUpload == true) {
       uploadImg(imgData, coresCsvData);
     }
@@ -361,8 +431,8 @@ window.addEventListener('load', () => {
   }
 
   function draw(event) {
-    let x = event.layerX;
-    let y = event.layerY;
+    let x = event.pageX - canvas.offsetLeft;
+    let y = event.pageY - canvas.offsetTop;
 
     if (isLoadedImage && isDrag && !isCrossedMask) {
       isCrossedMask = (isStartInsideMask && !isInsideMask(x, y)) || (!isStartInsideMask && isInsideMask(x, y));
@@ -392,12 +462,10 @@ window.addEventListener('load', () => {
     canvas.addEventListener('touchstart', dragStart);
     canvas.addEventListener('touchend', dragEnd);
     canvas.addEventListener('touchmove', draw);
-    // canvas.addEventListener('mouseout', dragEnd); // TODO: 余分に出力されている。直す必要があるかどうか検討
-
   }
 
   function initEventHandler() {
-    if (operatingButton == "Mouce") {
+    if (operatingButton == "Mouse") {
       clearButton.addEventListener('click', clearExceptImg);
       imgForwardButton.addEventListener('click', imgForward);
       imgBackwardButton.addEventListener('click', imgBackward);
@@ -410,7 +478,7 @@ window.addEventListener('load', () => {
     }
    
     addEventListenerToCanvas(canvas);
-    addEventListenerToCanvas(ribeyeCanvas);
+    addEventListenerToCanvas(initPreviewCanvas);
   }
 
   function createSortedPathAndImgList(e) {
